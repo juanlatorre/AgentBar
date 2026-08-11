@@ -2,6 +2,11 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 102: Fix truncated menu bar percentages
+- **Root cause**: the three pinned blocks need ~146pt but the status item was 140pt; after dropping the block's `.fixedSize()` in the centering change, SwiftUI compressed the percentage texts, rendering them as "10…".
+- **Fix**: restored `.fixedSize()` on each `ServiceUsageStack` (blocks never compress) and widened the status item to 150pt. Verified the item now measures 152×24 with full text.
+- All 284 tests passing
+
 ## Iteration 101: Vertically center menu bar icons within percentage stacks
 - **Layout polish**: in `StatusBarUsageView`, each service block is now an HStack where the short-name icon stretches to the full block height (`.frame(maxHeight: .infinity)`) so CC/CX/OC sit vertically centered between the stacked 5h and weekly percentages, instead of hugging the first line. Codex keeps its empty second line so all icons align across blocks.
 - All 284 tests passing

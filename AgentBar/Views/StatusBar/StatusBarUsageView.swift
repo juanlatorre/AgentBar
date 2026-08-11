@@ -71,6 +71,7 @@ private struct ServiceUsageStack: View {
                     .monospacedDigit()
             }
         }
+        .fixedSize()
     }
 
     private func percentString(_ fraction: Double) -> String {
