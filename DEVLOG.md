@@ -2,6 +2,10 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 101: Vertically center menu bar icons within percentage stacks
+- **Layout polish**: in `StatusBarUsageView`, each service block is now an HStack where the short-name icon stretches to the full block height (`.frame(maxHeight: .infinity)`) so CC/CX/OC sit vertically centered between the stacked 5h and weekly percentages, instead of hugging the first line. Codex keeps its empty second line so all icons align across blocks.
+- All 284 tests passing
+
 ## Iteration 100: Fix invisible menu bar strip after pinned redesign
 - **Root cause**: switching the status item to `NSStatusItem.variableLength` broke the strip — at setup time the fresh button's bounds were still empty, so `button.bounds.insetBy(dx: 3, dy: 0)` produced a negative-size (invisible) hosting frame that autoresizing never repaired. The item fell back to its tiny default size.
 - **Fix**: `StatusBarController` uses a fixed 140pt item with a clamped non-negative hosting frame; `StatusBarUsageView` centers its content with `.frame(maxWidth: .infinity)`. Verified via System Events that the menu bar item now measures 142×24.

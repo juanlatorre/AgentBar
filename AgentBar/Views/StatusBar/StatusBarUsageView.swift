@@ -56,25 +56,21 @@ private struct ServiceUsageStack: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 2) {
-                Text(usage.service.shortName)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(usage.service.darkColor)
-                    .frame(width: 18, alignment: .leading)
+        HStack(spacing: 2) {
+            Text(usage.service.shortName)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(usage.service.darkColor)
+                .frame(width: 18, alignment: .leading)
+                .frame(maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 1) {
                 Text(fiveHourPercent)
                     .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-            }
-            HStack(spacing: 2) {
-                Color.clear
-                    .frame(width: 18, height: 0)
                 Text(weeklyPercent)
                     .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
             }
         }
-        .fixedSize()
     }
 
     private func percentString(_ fraction: Double) -> String {
