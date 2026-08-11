@@ -27,7 +27,6 @@ struct SettingsView: View {
 
     @AppStorage("codexEnabled") private var codexEnabled = true
     @AppStorage("codexPlan") private var codexPlan: String = CodexPlan.pro.rawValue
-    @AppStorage("codexFiveHourLimit") private var codexFiveHourLimit: Double = 10_000_000
     @AppStorage("codexWeeklyLimit") private var codexWeeklyLimit: Double = 100_000_000
 
     @AppStorage("geminiEnabled") private var geminiEnabled = true
@@ -167,24 +166,9 @@ struct SettingsView: View {
                 }
                 .onChange(of: codexPlan) { newValue in
                     if let plan = CodexPlan(rawValue: newValue), plan != .custom {
-                        codexFiveHourLimit = plan.fiveHourTokenLimit
                         codexWeeklyLimit = plan.weeklyTokenLimit
                     }
                     notifyLimitsChanged()
-                }
-
-                HStack {
-                    Text("5h token limit:")
-                    TextField("", value: $codexFiveHourLimit, format: .number)
-                        .frame(width: 120)
-                        .disabled(codexPlan != CodexPlan.custom.rawValue)
-                    Text("tokens")
-                        .foregroundStyle(.secondary)
-                }
-                .onChange(of: codexFiveHourLimit) { _ in
-                    if codexPlan == CodexPlan.custom.rawValue {
-                        notifyLimitsChanged()
-                    }
                 }
 
                 HStack {
@@ -201,7 +185,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Usage is derived from local session logs in ~/.codex/sessions")
+                Text("Usage is derived from local session logs in ~/.codex/sessions. ChatGPT plans have a single weekly usage limit.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

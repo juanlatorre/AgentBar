@@ -74,7 +74,7 @@ final class UsageHistoryViewModelTests: XCTestCase {
     @MainActor
     func testCycleSummaryComputesCompletionAndStreak() async {
         let now = makeDate(2026, 1, 25, 12, 0)
-        let service: ServiceType = .codex
+        let service: ServiceType = .claude
         let reset1 = makeDate(2026, 1, 10, 0, 0)
         let reset2 = makeDate(2026, 1, 17, 0, 0)
         let resetFuture = makeDate(2026, 1, 31, 0, 0)
@@ -175,7 +175,7 @@ final class UsageHistoryViewModelTests: XCTestCase {
     @MainActor
     func testLatestRefreshGenerationWinsWhenRefreshesOverlap() async {
         let now = makeDate(2026, 2, 19, 12, 0)
-        let service: ServiceType = .codex
+        let service: ServiceType = .claude
         let records = [
             makeDayRecord(
                 service: service,

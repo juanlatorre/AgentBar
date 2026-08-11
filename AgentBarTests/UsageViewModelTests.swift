@@ -163,8 +163,8 @@ final class UsageViewModelTests: XCTestCase {
     }
 
     func testPlanEnumsRoundTripAndHaveExpectedCases() {
-        XCTAssertEqual(CodexPlan.plus.fiveHourTokenLimit, 1_000_000)
         XCTAssertEqual(CodexPlan.plus.weeklyTokenLimit, 10_000_000)
+        XCTAssertEqual(CodexPlan.pro.weeklyTokenLimit, 100_000_000)
         XCTAssertEqual(CodexPlan.allCases.first, .plus)
         for plan in CodexPlan.allCases {
             XCTAssertEqual(CodexPlan(rawValue: plan.rawValue), plan)

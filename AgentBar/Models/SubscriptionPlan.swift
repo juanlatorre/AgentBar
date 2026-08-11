@@ -5,14 +5,6 @@ enum CodexPlan: String, CaseIterable, Codable, Sendable {
     case pro = "Pro"
     case custom = "Custom"
 
-    var fiveHourTokenLimit: Double {
-        switch self {
-        case .plus: return 1_000_000
-        case .pro: return 10_000_000
-        case .custom: return 0
-        }
-    }
-
     var weeklyTokenLimit: Double {
         switch self {
         case .plus: return 10_000_000

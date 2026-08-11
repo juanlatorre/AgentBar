@@ -48,23 +48,27 @@ struct CodexRateWindow: Decodable, Sendable {
 
 // MARK: - Provider
 
+/// Reads Codex (ChatGPT) usage from local session files.
+///
+/// The current rate-limit payload exposes a single weekly window:
+/// `rate_limits.primary` with `window_minutes: 10080` (7 days) and no
+/// secondary window — the 5-hour limit no longer exists. For sessions
+/// written before that change, the weekly window lives in `secondary`,
+/// so we pick whichever window covers 7 days.
 final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
     let serviceType: ServiceType = .codex
 
     private let sessionsDir: URL
-    private let fiveHourTokenLimit: Double
     private let weeklyTokenLimit: Double
     private let defaults: UserDefaults
 
     init(
         sessionsDir: URL? = nil,
-        fiveHourTokenLimit: Double = 10_000_000,
         weeklyTokenLimit: Double = 100_000_000,
         defaults: UserDefaults = .standard
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser
         self.sessionsDir = sessionsDir ?? home.appendingPathComponent(".codex/sessions")
-        self.fiveHourTokenLimit = fiveHourTokenLimit
         self.weeklyTokenLimit = weeklyTokenLimit
         self.defaults = defaults
     }
@@ -76,39 +80,21 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
     func fetchUsage() async throws -> UsageData {
         let now = Date()
 
-        // Find the most recent rate_limits from session files
-        let latestRateLimits = findLatestRateLimits(now: now)
-
-        let fiveHourMetric: UsageMetric
         let weeklyMetric: UsageMetric
-
-        if let rateLimits = latestRateLimits {
-            let (primaryUsed, primaryReset) = resolveAggregatedWindow(
-                windows: rateLimits.compactMap(\.primary),
-                tokenLimit: fiveHourTokenLimit,
-                now: now
-            )
-            fiveHourMetric = resolveMetric(
-                used: primaryUsed, total: fiveHourTokenLimit,
-                resetTime: primaryReset, cacheKey: "codexUsageCache.fiveHour", now: now
-            )
-
-            let (secondaryUsed, secondaryReset) = resolveAggregatedWindow(
-                windows: rateLimits.compactMap(\.secondary),
+        if let rateLimits = findLatestRateLimits(now: now) {
+            let windows = rateLimits.compactMap(Self.weeklyWindow(from:))
+            let (used, resetTime) = resolveAggregatedWindow(
+                windows: windows,
                 tokenLimit: weeklyTokenLimit,
                 now: now
             )
             weeklyMetric = resolveMetric(
-                used: secondaryUsed, total: weeklyTokenLimit,
-                resetTime: secondaryReset, cacheKey: "codexUsageCache.weekly", now: now
+                used: used, total: weeklyTokenLimit,
+                resetTime: resetTime, cacheKey: "codexUsageCache.weekly", now: now
             )
         } else {
-            // Fallback: sum tokens from session files
-            let (fiveHour, weekly) = sumTokensFromSessions(now: now)
-            fiveHourMetric = resolveMetric(
-                used: Double(fiveHour), total: fiveHourTokenLimit,
-                resetTime: nil, cacheKey: "codexUsageCache.fiveHour", now: now
-            )
+            // Fallback: sum tokens from session files within the weekly window
+            let weekly = sumTokensFromSessions(now: now)
             weeklyMetric = resolveMetric(
                 used: Double(weekly), total: weeklyTokenLimit,
                 resetTime: nil, cacheKey: "codexUsageCache.weekly", now: now
@@ -120,12 +106,22 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
 
         return UsageData(
             service: .codex,
-            fiveHourUsage: fiveHourMetric,
-            weeklyUsage: weeklyMetric,
+            fiveHourUsage: weeklyMetric,
+            weeklyUsage: nil,
             lastUpdated: now,
             isAvailable: true,
             planName: planName
         )
+    }
+
+    /// Selects the 7-day window from a rate-limit payload.
+    /// Current format: `primary` is the weekly window (window_minutes 10080).
+    /// Legacy format: `primary` is 5h and `secondary` is the weekly window.
+    private static func weeklyWindow(from limits: CodexRateLimits) -> CodexRateWindow? {
+        if let primary = limits.primary, (primary.window_minutes ?? 0) >= 10080 {
+            return primary
+        }
+        return limits.secondary
     }
 
     // MARK: - Metric Caching
@@ -184,7 +180,7 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
         guard defaults.object(forKey: "\(key).used") != nil else { return nil }
         let used = defaults.double(forKey: "\(key).used")
         let total = defaults.object(forKey: "\(key).total") != nil
-            ? defaults.double(forKey: "\(key).total") : fiveHourTokenLimit
+            ? defaults.double(forKey: "\(key).total") : weeklyTokenLimit
         let resetTimestamp = defaults.object(forKey: "\(key).resetTime") as? Double
         let resetTime = resetTimestamp.map { Date(timeIntervalSince1970: $0) }
         return UsageMetric(used: used, total: total, unit: .tokens, resetTime: resetTime)
@@ -308,12 +304,10 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
 
     // MARK: - Token Summing Fallback
 
-    private func sumTokensFromSessions(now: Date) -> (fiveHour: Int, weekly: Int) {
-        let fiveHourCutoff = DateUtils.fiveHourWindowStart(relativeTo: now)
+    private func sumTokensFromSessions(now: Date) -> Int {
         let weeklyCutoff = DateUtils.weeklyWindowStart(relativeTo: now)
 
         let files = findSessionFiles(within: 7 * 24 * 3600, relativeTo: now)
-        var fiveHourTotal = 0
         var weeklyTotal = 0
 
         for file in files {
@@ -327,16 +321,13 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
                       let date = DateUtils.parseISO8601(ts) else { continue }
 
                 let tokens = lastUsage.totalTokens
-                if date >= fiveHourCutoff && date <= now {
-                    fiveHourTotal += tokens
-                }
                 if date >= weeklyCutoff && date <= now {
                     weeklyTotal += tokens
                 }
             }
         }
 
-        return (fiveHourTotal, weeklyTotal)
+        return weeklyTotal
     }
 
     // MARK: - Directory Traversal

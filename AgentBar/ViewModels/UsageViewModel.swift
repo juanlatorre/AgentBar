@@ -145,10 +145,8 @@ final class UsageViewModel: ObservableObject {
         }
 
         if isEnabled("codexEnabled", in: defaults) {
-            let codexLimits = codexTokenLimits(in: defaults)
             providers.append(CodexUsageProvider(
-                fiveHourTokenLimit: codexLimits.fiveHour,
-                weeklyTokenLimit: codexLimits.weekly
+                weeklyTokenLimit: codexWeeklyLimit(in: defaults)
             ))
         }
 
@@ -187,18 +185,15 @@ final class UsageViewModel: ObservableObject {
         defaults.bool(forKey: key, defaultValue: true)
     }
 
-    private static func codexTokenLimits(in defaults: UserDefaults) -> (fiveHour: Double, weekly: Double) {
+    private static func codexWeeklyLimit(in defaults: UserDefaults) -> Double {
         let planRaw = defaults.string(forKey: "codexPlan") ?? CodexPlan.pro.rawValue
         let plan = CodexPlan(rawValue: planRaw) ?? .pro
 
         if plan == .custom {
-            return (
-                defaults.double(forKey: "codexFiveHourLimit").nonZero ?? CodexPlan.pro.fiveHourTokenLimit,
-                defaults.double(forKey: "codexWeeklyLimit").nonZero ?? CodexPlan.pro.weeklyTokenLimit
-            )
+            return defaults.double(forKey: "codexWeeklyLimit").nonZero ?? CodexPlan.pro.weeklyTokenLimit
         }
 
-        return (plan.fiveHourTokenLimit, plan.weeklyTokenLimit)
+        return plan.weeklyTokenLimit
     }
 
     private static func geminiDailyLimit(in defaults: UserDefaults) -> Double {

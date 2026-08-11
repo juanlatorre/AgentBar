@@ -2,6 +2,12 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 96: Codex single weekly window (no more 5h limit)
+- **Codex/ChatGPT weekly-only**: OpenAI's rate-limit payload changed — current sessions expose `rate_limits.primary` with `window_minutes: 10080` (7 days) and no secondary window; the 5-hour limit no longer exists (verified against actual `~/.codex/sessions` data: recent entries are `primary 10080 / secondary None`, 5h windows only appear in old history). `CodexUsageProvider` now reports a single weekly metric in `fiveHourUsage` with `weeklyUsage = nil` (same pattern as Gemini/Copilot/Cursor). `weeklyWindow(from:)` picks the 7-day window from `primary` (current format) or `secondary` (legacy sessions), keeping multi-`limit_id` aggregation, stale-reset resolution, token-summing fallback, and the weekly cache (`codexUsageCache.weekly`).
+- **UI/plans updated**: Codex row label is now "7d", the 5h token-limit field was removed from Settings (only the weekly limit remains), `CodexPlan.fiveHourTokenLimit` was deleted, and `UsageViewModel` builds the provider with only `weeklyTokenLimit`. Usage-history tests that relied on Codex's secondary window now use Claude (still 5h/7d).
+- **New test**: `testLegacyFormatFallsBackToSecondaryWeeklyWindow`; codex tests rewritten for the weekly-only payload.
+- All 290 tests passing
+
 ## Iteration 95: Brand-aligned service colors
 - **Codex now blue**: `ServiceType.codex` switched from gray-400 to blue-700 (dark) / blue-400 (light) to match ChatGPT/OpenAI branding, keeping it visually distinct from Gemini and Copilot (both blue-600) so the pairwise color test still passes.
 - **OpenCode now yellow**: `ServiceType.opencode` switched from cyan-600 to yellow-500 (dark) / yellow-200 (light), matching opencode's branding; Claude stays amber (already orange). Updated `testCodexDarkColorIsGray400` → `testCodexDarkColorIsBlue700`.

@@ -47,6 +47,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
 
     var fiveHourLabel: String {
         switch self {
+        case .codex: "7d"
         case .gemini: "1d"
         case .copilot, .cursor: "Mo"
         default: "5h"
