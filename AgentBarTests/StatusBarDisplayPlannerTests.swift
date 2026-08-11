@@ -48,7 +48,7 @@ final class StatusBarDisplayPlannerTests: XCTestCase {
         XCTAssertEqual(ranked.map(\.service), [.claude, .codex])
     }
 
-    func testMaxScrollIndexIsZeroWhenServicesWithinVisibleCount() {
+    func testMaxScrollIndexWalksAllServicesOneByOne() {
         let services = [
             makeUsage(service: .claude, fiveHourPct: 0.95),
             makeUsage(service: .codex, fiveHourPct: 0.90),
@@ -56,10 +56,10 @@ final class StatusBarDisplayPlannerTests: XCTestCase {
         ]
 
         let ranked = StatusBarDisplayPlanner.rankedServices(from: services)
-        XCTAssertEqual(StatusBarDisplayPlanner.maxScrollIndex(for: ranked), 0)
+        XCTAssertEqual(StatusBarDisplayPlanner.maxScrollIndex(for: ranked), 2)
     }
 
-    func testMaxScrollIndexEqualsOverflowRowCount() {
+    func testMaxScrollIndexEqualsLastServiceIndex() {
         let services = [
             makeUsage(service: .claude, fiveHourPct: 0.99),
             makeUsage(service: .codex, fiveHourPct: 0.98),
@@ -71,7 +71,42 @@ final class StatusBarDisplayPlannerTests: XCTestCase {
         ]
 
         let ranked = StatusBarDisplayPlanner.rankedServices(from: services)
-        XCTAssertEqual(StatusBarDisplayPlanner.maxScrollIndex(for: ranked), 4)
+        XCTAssertEqual(StatusBarDisplayPlanner.maxScrollIndex(for: ranked), 6)
+    }
+
+    func testCriticalRemainingPercentageTakesLowestWindow() {
+        let services = [
+            makeUsage(service: .claude, fiveHourPct: 0.9),
+            makeUsage(service: .codex, fiveHourPct: 0.2)
+        ]
+
+        XCTAssertEqual(
+            StatusBarDisplayPlanner.criticalRemainingPercentage(for: services[0]),
+            0.1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            StatusBarDisplayPlanner.criticalRemainingPercentage(for: services[1]),
+            0.8,
+            accuracy: 0.001
+        )
+    }
+
+    func testCriticalRemainingPercentageIgnoresMissingWindows() {
+        let usage = UsageData(
+            service: .opencode,
+            fiveHourUsage: UsageMetric(used: 0, total: 12, unit: .dollars, resetTime: nil),
+            weeklyUsage: nil,
+            monthlyUsage: nil,
+            lastUpdated: Date(),
+            isAvailable: true
+        )
+
+        XCTAssertEqual(
+            StatusBarDisplayPlanner.criticalRemainingPercentage(for: usage),
+            1.0,
+            accuracy: 0.001
+        )
     }
 
     func testTieBreakUsesServiceOrder() {

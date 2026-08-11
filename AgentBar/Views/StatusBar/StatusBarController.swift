@@ -5,7 +5,7 @@ import Combine
 @MainActor
 final class StatusBarController {
     private var statusItem: NSStatusItem?
-    private var hostingView: NSHostingView<StackedBarView>?
+    private var hostingView: NSHostingView<StatusBarUsageView>?
     private var cancellables: Set<AnyCancellable> = []
     private var setupRetryCount = 0
     private let maxSetupRetries = 10
@@ -29,7 +29,7 @@ final class StatusBarController {
         setupRetryCount = 0
         hostingView?.removeFromSuperview()
 
-        let barView = StackedBarView(services: viewModel.usageData)
+        let barView = StatusBarUsageView(services: viewModel.usageData)
         let hosting = NSHostingView(rootView: barView)
         hosting.frame = button.bounds.insetBy(dx: 3, dy: 0)
         hosting.autoresizingMask = [.width, .height]
@@ -42,7 +42,7 @@ final class StatusBarController {
                 .combineLatest(viewModel.$lastError)
                 .receive(on: RunLoop.main)
                 .sink { [weak self] data, error in
-                    self?.hostingView?.rootView = StackedBarView(
+                    self?.hostingView?.rootView = StatusBarUsageView(
                         services: data,
                         hasError: error != nil
                     )

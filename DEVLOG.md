@@ -2,6 +2,12 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 98: Menu bar shows icon + percentage (OpenUsage style)
+- **Status bar redesign**: Replaced the stacked bars (`StackedBarView`/`SingleBarView`) with `StatusBarUsageView` — the service's short-name icon in its brand color plus the remaining percentage (e.g. "CX 96%"), like OpenUsage's text strip. The cycle still shows the most critical service first (8s), then rotates through all services every 3s; hovering jumps back to the top and pauses.
+- **Planner simplified**: `StatusBarDisplayPlanner` no longer needs row layout (rowHeight/spacing/viewport/visibleRowCount removed); `maxScrollIndex` now walks every service (count−1) and a new `criticalRemainingPercentage(for:)` (min across 5h/week/month windows) drives both ranking and the shown percentage. `StatusBarController` uses the renamed view; the 90pt status item already fits the text.
+- **Tests**: updated `maxScrollIndex` expectations, added `testCriticalRemainingPercentageTakesLowestWindow` and `testCriticalRemainingPercentageIgnoresMissingWindows`.
+- All 292 tests passing
+
 ## Iteration 97: OpenCode Go monthly window + third-window support
 - **Monthly limit**: OpenCode Go's dashboard tracks three windows (5h / weekly / monthly), matching the published $12 / $30 / $60 limits. `UsageData` gained an optional `monthlyUsage` metric (default nil) and `ServiceType.monthlyLabel` ("Mo" for OpenCode). `OpenCodeGoUsageProvider` now sums message costs across 5h / 7d / 30d (`DateUtils.monthlyWindowStart`) and Settings gained a "Monthly limit" field (`opencodeGoMonthlyLimit`).
 - **UI**: ServiceDetailRow renders a third MetricRow when present; MiniBarView/SingleBarView draw three remaining layers (monthly lightest via 0.55 opacity, weekly, 5h dark); ranking in `sortedForDisplay` / `StatusBarDisplayPlanner.usageScore` takes the min of all three remaining percentages; the scroll-loop signature includes the monthly value.
