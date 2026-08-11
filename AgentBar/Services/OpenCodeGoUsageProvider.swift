@@ -2,22 +2,59 @@ import Foundation
 
 // MARK: - OpenCode Go Usage API Response (actual format, verified 2026-08)
 
-/// GET https://opencode.ai/zen/go/v1/usage with the plan API key returns:
+/// GET https://opencode.ai/zen/go/v1/usage with the plan API key. The backend
+/// has served two shapes; both are supported:
+///
+/// Shape A (older):
 /// {"useBalance":false,
 ///  "rollingUsage":{"status":"ok","resetInSec":13561,"usagePercent":0},
 ///  "weeklyUsage":{"status":"ok","resetInSec":441666,"usagePercent":69},
 ///  "monthlyUsage":{"status":"ok","resetInSec":2068758,"usagePercent":49}}
+///
+/// Shape B (current):
+/// {"usage":{"rolling":{"status":"ok","percent":0,"resetsAt":"2026-08-12T01:04:55.135Z"},
+///           "weekly":{"status":"ok","percent":69,"resetsAt":"..."},
+///           "monthly":{"status":"ok","percent":49,"resetsAt":"..."}}}
 struct OpenCodeGoUsageResponse: Decodable, Sendable {
     let useBalance: Bool?
     let rollingUsage: OpenCodeGoUsageWindow?
     let weeklyUsage: OpenCodeGoUsageWindow?
     let monthlyUsage: OpenCodeGoUsageWindow?
+    let usage: OpenCodeGoUsageGroup?
+
+    var rolling: OpenCodeGoUsageWindow? { rollingUsage ?? usage?.rolling }
+    var weekly: OpenCodeGoUsageWindow? { weeklyUsage ?? usage?.weekly }
+    var monthly: OpenCodeGoUsageWindow? { monthlyUsage ?? usage?.monthly }
+}
+
+struct OpenCodeGoUsageGroup: Decodable, Sendable {
+    let rolling: OpenCodeGoUsageWindow?
+    let weekly: OpenCodeGoUsageWindow?
+    let monthly: OpenCodeGoUsageWindow?
 }
 
 struct OpenCodeGoUsageWindow: Decodable, Sendable {
     let status: String?
     let resetInSec: Int?
     let usagePercent: Double?
+    let percent: Double?
+    let resetsAt: String?
+
+    /// Usage percentage regardless of API shape.
+    var resolvedPercent: Double? {
+        usagePercent ?? percent
+    }
+
+    /// Reset time regardless of API shape (epoch-relative seconds or ISO8601).
+    func resolvedReset(relativeTo now: Date) -> Date? {
+        if let resetInSec, resetInSec >= 0 {
+            return now.addingTimeInterval(TimeInterval(resetInSec))
+        }
+        if let resetsAt {
+            return DateUtils.parseISO8601(resetsAt)
+        }
+        return nil
+    }
 }
 
 /// The OpenCode Go plan key lives in the local opencode auth store:
@@ -117,21 +154,9 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
 
         let result = UsageData(
             service: .opencode,
-            fiveHourUsage: metric(
-                from: response.rollingUsage,
-                resetInSec: response.rollingUsage?.resetInSec,
-                now: now
-            ),
-            weeklyUsage: metric(
-                from: response.weeklyUsage,
-                resetInSec: response.weeklyUsage?.resetInSec,
-                now: now
-            ),
-            monthlyUsage: metric(
-                from: response.monthlyUsage,
-                resetInSec: response.monthlyUsage?.resetInSec,
-                now: now
-            ),
+            fiveHourUsage: metric(from: response.rolling, now: now),
+            weeklyUsage: metric(from: response.weekly, now: now),
+            monthlyUsage: metric(from: response.monthly, now: now),
             lastUpdated: now,
             isAvailable: true,
             planName: "Go"
@@ -144,20 +169,16 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
     // MARK: - Helpers
 
     /// Builds a percent-based metric: `used` is the server's usage percentage
-    /// against a total of 100, with the reset time derived from `resetInSec`.
+    /// against a total of 100, with the reset time derived from the window.
     private func metric(
         from window: OpenCodeGoUsageWindow?,
-        resetInSec: Int?,
         now: Date
     ) -> UsageMetric {
-        let resetTime = resetInSec.flatMap { sec -> Date? in
-            sec >= 0 ? now.addingTimeInterval(TimeInterval(sec)) : nil
-        }
-        return UsageMetric(
-            used: window?.usagePercent ?? 0,
+        UsageMetric(
+            used: window?.resolvedPercent ?? 0,
             total: 100,
             unit: .percent,
-            resetTime: resetTime
+            resetTime: window?.resolvedReset(relativeTo: now)
         )
     }
 

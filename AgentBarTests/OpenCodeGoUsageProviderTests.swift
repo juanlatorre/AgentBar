@@ -58,6 +58,31 @@ final class OpenCodeGoUsageProviderTests: XCTestCase {
         XCTAssertEqual(OpenCodeGoMockURLProtocol.authorizations, ["Bearer sk-test-key"])
     }
 
+    func testFetchUsageParsesCurrentUsageGroupShape() async throws {
+        // Current backend shape: usage.{rolling,weekly,monthly} with percent + ISO resetsAt.
+        let json = """
+        {"usage":{"rolling":{"status":"ok","percent":0,"resetsAt":"2026-08-12T01:04:55.135Z"},
+                   "weekly":{"status":"ok","percent":69,"resetsAt":"2026-08-17T00:00:00.135Z"},
+                   "monthly":{"status":"ok","percent":49,"resetsAt":"2026-09-04T19:58:12.135Z"}}}
+        """
+        OpenCodeGoMockURLProtocol.stubResponse(data: Data(json.utf8), statusCode: 200)
+
+        let provider = OpenCodeGoUsageProvider(
+            apiClient: APIClient(session: OpenCodeGoMockURLProtocol.session()),
+            credentialProvider: { "sk-test-key" }
+        )
+
+        let usage = try await provider.fetchUsage()
+
+        XCTAssertEqual(usage.fiveHourUsage.used, 0, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.used ?? 0, 69, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.remainingPercentage ?? 0, 0.31, accuracy: 0.001)
+        XCTAssertEqual(usage.monthlyUsage?.used ?? 0, 49, accuracy: 0.001)
+        XCTAssertNotNil(usage.fiveHourUsage.resetTime)
+        XCTAssertNotNil(usage.weeklyUsage?.resetTime)
+        XCTAssertNotNil(usage.monthlyUsage?.resetTime)
+    }
+
     func testFetchUsageDefaultsToZeroWhenWindowsMissing() async throws {
         let json = #"{"useBalance":false}"#
         OpenCodeGoMockURLProtocol.stubResponse(data: Data(json.utf8), statusCode: 200)
