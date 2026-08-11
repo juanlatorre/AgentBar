@@ -2,6 +2,10 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 105: Show used percentages like the OpenCode Go dashboard
+- **Reversal of the remaining toggle**: after comparing with the OpenCode Go dashboard (which shows used %), the app now displays consumed percentages everywhere: menu bar ("OC 0% / 69%"), MetricRow values and badges, MiniBarView fills, and the popover ranking (highest usage first). `UsageMetric.remaining` / `remainingPercentage` were removed; tests assert `percentage` (0.0/0.69/0.49).
+- All 287 tests passing
+
 ## Iteration 104: OpenCode Go usage from the official API
 - **Wrong local data**: the previous provider summed `cost` from local opencode messages, but no `opencode-go` messages exist locally — the plan's usage is tracked server-side (dashboard showed Weekly 69% / Monthly 49% while the app showed $0).
 - **Official endpoint found** (reverse-engineered from the opencode binary): `GET https://opencode.ai/zen/go/v1/usage` with `Authorization: Bearer <plan key>` returns `{useBalance, rollingUsage{usagePercent, resetInSec}, weeklyUsage, monthlyUsage}` — verified to match the user's dashboard exactly.
