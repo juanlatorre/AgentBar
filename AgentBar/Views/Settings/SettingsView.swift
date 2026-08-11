@@ -40,9 +40,9 @@ struct SettingsView: View {
     @AppStorage("cursorPlan") private var cursorPlan: String = CursorPlan.pro.rawValue
     @AppStorage("cursorMonthlyLimit") private var cursorMonthlyLimit: Double = 500
 
-    @AppStorage("opencodeEnabled") private var opencodeEnabled = true
-    @AppStorage("opencodeFiveHourLimit") private var opencodeFiveHourLimit: Double = 10_000_000
-    @AppStorage("opencodeWeeklyLimit") private var opencodeWeeklyLimit: Double = 100_000_000
+    @AppStorage("opencodeGoEnabled") private var opencodeGoEnabled = true
+    @AppStorage("opencodeGoFiveHourLimit") private var opencodeGoFiveHourLimit: Double = 12
+    @AppStorage("opencodeGoWeeklyLimit") private var opencodeGoWeeklyLimit: Double = 30
 
     @AppStorage("zaiEnabled") private var zaiEnabled = true
 
@@ -297,35 +297,35 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("OpenCode") {
-                Toggle("Enabled", isOn: $opencodeEnabled)
-                    .onChange(of: opencodeEnabled) { _ in
+            Section("OpenCode Go") {
+                Toggle("Enabled", isOn: $opencodeGoEnabled)
+                    .onChange(of: opencodeGoEnabled) { _ in
                         notifyLimitsChanged()
                     }
 
                 HStack {
-                    Text("5h token limit:")
-                    TextField("", value: $opencodeFiveHourLimit, format: .number)
+                    Text("5h limit:")
+                    TextField("", value: $opencodeGoFiveHourLimit, format: .number)
                         .frame(width: 120)
-                    Text("tokens")
+                    Text("USD")
                         .foregroundStyle(.secondary)
                 }
-                .onChange(of: opencodeFiveHourLimit) { _ in
+                .onChange(of: opencodeGoFiveHourLimit) { _ in
                     notifyLimitsChanged()
                 }
 
                 HStack {
-                    Text("Weekly token limit:")
-                    TextField("", value: $opencodeWeeklyLimit, format: .number)
+                    Text("Weekly limit:")
+                    TextField("", value: $opencodeGoWeeklyLimit, format: .number)
                         .frame(width: 120)
-                    Text("tokens")
+                    Text("USD")
                         .foregroundStyle(.secondary)
                 }
-                .onChange(of: opencodeWeeklyLimit) { _ in
+                .onChange(of: opencodeGoWeeklyLimit) { _ in
                     notifyLimitsChanged()
                 }
 
-                Text("Usage is derived from the local opencode database at ~/.local/share/opencode/opencode.db")
+                Text("OpenCode Go plan limits are $12/5h and $30/week. Usage is derived from local opencode messages at ~/.local/share/opencode/opencode.db")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

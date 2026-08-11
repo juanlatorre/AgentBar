@@ -1,47 +1,60 @@
 import Foundation
 import SQLite3
 
-// MARK: - OpenCode Message Record Models (matches actual opencode SQLite database)
+// MARK: - OpenCode Go Message Record Models (matches actual opencode SQLite database)
 
 /// Subset of the `message` row JSON payload stored in `~/.local/share/opencode/opencode.db`.
-struct OpenCodeMessageRecord: Decodable, Sendable {
-    struct Tokens: Decodable, Sendable {
-        let total: Int?
+///
+/// OpenCode Go messages carry `providerID == "opencode-go"` and a per-request
+/// `cost` in USD, which is what the plan's usage limits are denominated in
+/// (see https://opencode.ai/docs/go: 5h limit $12, weekly limit $30, monthly $60).
+struct OpenCodeGoMessageRecord: Decodable, Sendable {
+    struct Model: Decodable, Sendable {
+        let providerID: String?
     }
 
-    let tokens: Tokens?
+    let providerID: String?
+    let model: Model?
+    let cost: Double?
+
+    /// Whether this message was served through the OpenCode Go plan.
+    var isOpenCodeGo: Bool {
+        providerID == "opencode-go" || model?.providerID == "opencode-go"
+    }
 }
 
-enum OpenCodeUsageError: Error, Sendable {
+enum OpenCodeGoUsageError: Error, Sendable {
     case databaseUnavailable
     case missingMessageTable
 }
 
 // MARK: - Provider
 
-/// Reads token usage from the local opencode SQLite database
+/// Reads OpenCode Go plan usage from the local opencode SQLite database
 /// (`~/.local/share/opencode/opencode.db`, table `message`).
 ///
 /// Each message row stores `time_created` (epoch milliseconds) and a JSON
-/// payload in `data` that includes `tokens.total`. Usage is summed across the
-/// standard 5h / 7d sliding windows, mirroring the Codex provider's approach.
-final class OpenCodeUsageProvider: UsageProviderProtocol, @unchecked Sendable {
+/// payload in `data` that includes `providerID` and `cost` (USD). Only
+/// messages served through the `opencode-go` provider are counted, summed
+/// across the standard 5h / 7d sliding windows. Limits default to the
+/// published Go plan values ($12 / $30) and are configurable in Settings.
+final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable {
     let serviceType: ServiceType = .opencode
 
     private let databaseURL: URL
-    private let fiveHourTokenLimit: Double
-    private let weeklyTokenLimit: Double
+    private let fiveHourDollarLimit: Double
+    private let weeklyDollarLimit: Double
 
     init(
         databaseURL: URL? = nil,
-        fiveHourTokenLimit: Double = 10_000_000,
-        weeklyTokenLimit: Double = 100_000_000
+        fiveHourDollarLimit: Double = 12,
+        weeklyDollarLimit: Double = 30
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser
         self.databaseURL = databaseURL
             ?? home.appendingPathComponent(".local/share/opencode/opencode.db")
-        self.fiveHourTokenLimit = fiveHourTokenLimit
-        self.weeklyTokenLimit = weeklyTokenLimit
+        self.fiveHourDollarLimit = fiveHourDollarLimit
+        self.weeklyDollarLimit = weeklyDollarLimit
     }
 
     func isConfigured() async -> Bool {
@@ -50,32 +63,33 @@ final class OpenCodeUsageProvider: UsageProviderProtocol, @unchecked Sendable {
 
     func fetchUsage() async throws -> UsageData {
         let now = Date()
-        let totals = try sumTokensFromDatabase(now: now)
+        let totals = try sumCostFromDatabase(now: now)
 
         return UsageData(
             service: .opencode,
             fiveHourUsage: UsageMetric(
-                used: Double(totals.fiveHour),
-                total: fiveHourTokenLimit,
-                unit: .tokens,
+                used: totals.fiveHour,
+                total: fiveHourDollarLimit,
+                unit: .dollars,
                 resetTime: nil
             ),
             weeklyUsage: UsageMetric(
-                used: Double(totals.weekly),
-                total: weeklyTokenLimit,
-                unit: .tokens,
+                used: totals.weekly,
+                total: weeklyDollarLimit,
+                unit: .dollars,
                 resetTime: nil
             ),
             lastUpdated: now,
-            isAvailable: true
+            isAvailable: true,
+            planName: "Go"
         )
     }
 
     // MARK: - Database Reading
 
-    private func sumTokensFromDatabase(now: Date) throws -> (fiveHour: Int, weekly: Int) {
+    private func sumCostFromDatabase(now: Date) throws -> (fiveHour: Double, weekly: Double) {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else {
-            throw OpenCodeUsageError.databaseUnavailable
+            throw OpenCodeGoUsageError.databaseUnavailable
         }
 
         var handle: OpaquePointer?
@@ -83,7 +97,7 @@ final class OpenCodeUsageProvider: UsageProviderProtocol, @unchecked Sendable {
         guard sqlite3_open_v2(databaseURL.path, &handle, openFlags, nil) == SQLITE_OK,
               let handle else {
             sqlite3_close(handle)
-            throw OpenCodeUsageError.databaseUnavailable
+            throw OpenCodeGoUsageError.databaseUnavailable
         }
         defer { sqlite3_close(handle) }
 
@@ -98,18 +112,18 @@ final class OpenCodeUsageProvider: UsageProviderProtocol, @unchecked Sendable {
         guard sqlite3_prepare_v2(handle, query, -1, &statement, nil) == SQLITE_OK,
               let statement else {
             sqlite3_finalize(statement)
-            throw OpenCodeUsageError.missingMessageTable
+            throw OpenCodeGoUsageError.missingMessageTable
         }
         defer { sqlite3_finalize(statement) }
 
         guard sqlite3_bind_int64(statement, 1, weeklyCutoffMillis) == SQLITE_OK else {
-            throw OpenCodeUsageError.databaseUnavailable
+            throw OpenCodeGoUsageError.databaseUnavailable
         }
 
         let fiveHourCutoff = DateUtils.fiveHourWindowStart(relativeTo: now)
         let decoder = JSONDecoder()
-        var fiveHourTotal = 0
-        var weeklyTotal = 0
+        var fiveHourTotal: Double = 0
+        var weeklyTotal: Double = 0
 
         while sqlite3_step(statement) == SQLITE_ROW {
             let createdMillis = sqlite3_column_int64(statement, 0)
@@ -118,14 +132,15 @@ final class OpenCodeUsageProvider: UsageProviderProtocol, @unchecked Sendable {
             guard let dataPointer = sqlite3_column_text(statement, 1) else { continue }
             let jsonString = String(cString: dataPointer)
             guard let jsonData = jsonString.data(using: .utf8),
-                  let record = try? decoder.decode(OpenCodeMessageRecord.self, from: jsonData),
-                  let total = record.tokens?.total, total > 0 else { continue }
+                  let record = try? decoder.decode(OpenCodeGoMessageRecord.self, from: jsonData),
+                  record.isOpenCodeGo,
+                  let cost = record.cost, cost > 0 else { continue }
 
             let messageDate = Date(timeIntervalSince1970: TimeInterval(createdMillis) / 1000)
             if messageDate >= fiveHourCutoff {
-                fiveHourTotal += total
+                fiveHourTotal += cost
             }
-            weeklyTotal += total
+            weeklyTotal += cost
         }
 
         return (fiveHourTotal, weeklyTotal)

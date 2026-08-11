@@ -168,11 +168,11 @@ final class UsageViewModel: ObservableObject {
             ))
         }
 
-        if isEnabled("opencodeEnabled", in: defaults) {
-            let opencodeLimits = opencodeTokenLimits(in: defaults)
-            providers.append(OpenCodeUsageProvider(
-                fiveHourTokenLimit: opencodeLimits.fiveHour,
-                weeklyTokenLimit: opencodeLimits.weekly
+        if isEnabled("opencodeGoEnabled", in: defaults) {
+            let opencodeGoLimits = opencodeGoLimits(in: defaults)
+            providers.append(OpenCodeGoUsageProvider(
+                fiveHourDollarLimit: opencodeGoLimits.fiveHour,
+                weeklyDollarLimit: opencodeGoLimits.weekly
             ))
         }
 
@@ -213,10 +213,10 @@ final class UsageViewModel: ObservableObject {
         return plan.monthlyRequestEstimate
     }
 
-    private static func opencodeTokenLimits(in defaults: UserDefaults) -> (fiveHour: Double, weekly: Double) {
+    private static func opencodeGoLimits(in defaults: UserDefaults) -> (fiveHour: Double, weekly: Double) {
         (
-            defaults.double(forKey: "opencodeFiveHourLimit").nonZero ?? 10_000_000,
-            defaults.double(forKey: "opencodeWeeklyLimit").nonZero ?? 100_000_000
+            defaults.double(forKey: "opencodeGoFiveHourLimit").nonZero ?? 12,
+            defaults.double(forKey: "opencodeGoWeeklyLimit").nonZero ?? 30
         )
     }
 }

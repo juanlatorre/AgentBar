@@ -93,6 +93,7 @@ final class UsageHistoryViewModel: ObservableObject {
     private let nowProvider: @Sendable () -> Date
     private var cancellables: Set<AnyCancellable> = []
     private var refreshTask: Task<Void, Never>?
+    private var refreshTaskGeneration: UInt64 = 0
     private var refreshGeneration: UInt64 = 0
 
     private static let cyclePanelMaxCycles = 12
@@ -122,10 +123,26 @@ final class UsageHistoryViewModel: ObservableObject {
 
     func refresh() async {
         refreshTask?.cancel()
-        refreshTask = nil
         refreshGeneration &+= 1
         let generation = refreshGeneration
-        await refresh(generation: generation)
+        refreshTask = Task { [weak self] in
+            await self?.refresh(generation: generation)
+        }
+        refreshTaskGeneration = generation
+        // A concurrent refresh (e.g. from a .usageHistoryChanged notification)
+        // may replace `refreshTask` mid-await and invalidate this one. Wait for
+        // the latest task in the chain so callers observe a fully populated state.
+        await awaitLatestRefreshTask()
+    }
+
+    private func awaitLatestRefreshTask() async {
+        while true {
+            guard let task = refreshTask else { return }
+            let taskGeneration = refreshTaskGeneration
+            await task.value
+            guard taskGeneration != refreshGeneration else { return }
+            // The task was superseded while we waited; wait for the newer one.
+        }
     }
 
     private func refresh(generation: UInt64) async {
@@ -297,6 +314,7 @@ final class UsageHistoryViewModel: ObservableObject {
         refreshTask = Task { [weak self] in
             await self?.refresh(generation: generation)
         }
+        refreshTaskGeneration = generation
     }
 
     private func isStale(_ generation: UInt64) -> Bool {

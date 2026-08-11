@@ -2,13 +2,13 @@ import XCTest
 import SQLite3
 @testable import AgentBar
 
-final class OpenCodeUsageProviderTests: XCTestCase {
+final class OpenCodeGoUsageProviderTests: XCTestCase {
 
     private var tempDirectory: URL!
 
     override func setUpWithError() throws {
         tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenCodeUsageProviderTests-\(UUID().uuidString)")
+            .appendingPathComponent("OpenCodeGoUsageProviderTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(
             at: tempDirectory,
             withIntermediateDirectories: true
@@ -22,7 +22,7 @@ final class OpenCodeUsageProviderTests: XCTestCase {
     }
 
     func testIsConfiguredFalseWhenDatabaseMissing() async {
-        let provider = OpenCodeUsageProvider(databaseURL: tempDirectory.appendingPathComponent("missing.db"))
+        let provider = OpenCodeGoUsageProvider(databaseURL: tempDirectory.appendingPathComponent("missing.db"))
 
         let configured = await provider.isConfigured()
 
@@ -30,13 +30,13 @@ final class OpenCodeUsageProviderTests: XCTestCase {
     }
 
     func testFetchUsageThrowsWhenDatabaseMissing() async {
-        let provider = OpenCodeUsageProvider(databaseURL: tempDirectory.appendingPathComponent("missing.db"))
+        let provider = OpenCodeGoUsageProvider(databaseURL: tempDirectory.appendingPathComponent("missing.db"))
 
         do {
             _ = try await provider.fetchUsage()
             XCTFail("Expected fetchUsage to throw when the database file is missing.")
         } catch {
-            XCTAssertEqual(error as? OpenCodeUsageError, .databaseUnavailable)
+            XCTAssertEqual(error as? OpenCodeGoUsageError, .databaseUnavailable)
         }
     }
 
@@ -44,17 +44,17 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         let dbURL = tempDirectory.appendingPathComponent("empty.db")
         try createDatabase(at: dbURL, createMessageTable: false)
 
-        let provider = OpenCodeUsageProvider(databaseURL: dbURL)
+        let provider = OpenCodeGoUsageProvider(databaseURL: dbURL)
 
         do {
             _ = try await provider.fetchUsage()
             XCTFail("Expected fetchUsage to throw when the message table is missing.")
         } catch {
-            XCTAssertEqual(error as? OpenCodeUsageError, .missingMessageTable)
+            XCTAssertEqual(error as? OpenCodeGoUsageError, .missingMessageTable)
         }
     }
 
-    func testFetchUsageSumsTokensWithinWindows() async throws {
+    func testFetchUsageSumsCostWithinWindows() async throws {
         let dbURL = tempDirectory.appendingPathComponent("usage.db")
         try createDatabase(at: dbURL, createMessageTable: true)
 
@@ -62,42 +62,72 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-1 * 3600),   // inside 5h and 7d
-            totalTokens: 1_000
+            providerID: "opencode-go",
+            cost: 1.50
         )
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-4 * 3600),   // inside 5h and 7d
-            totalTokens: 2_000
+            providerID: "opencode-go",
+            cost: 2.25
         )
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-6 * 3600),   // only inside 7d
-            totalTokens: 4_000
+            providerID: "opencode-go",
+            cost: 4.00
         )
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-8 * 24 * 3600), // outside both windows
-            totalTokens: 8_000
+            providerID: "opencode-go",
+            cost: 8.00
+        )
+        // Messages from other providers must never count toward the Go plan.
+        try insertMessage(
+            into: dbURL,
+            timeCreated: now.addingTimeInterval(-2 * 3600),
+            providerID: "zai-coding-plan",
+            cost: 99.00
+        )
+        try insertMessage(
+            into: dbURL,
+            timeCreated: now.addingTimeInterval(-2 * 3600),
+            providerID: "opencode",
+            cost: 99.00
         )
 
-        let provider = OpenCodeUsageProvider(
+        let provider = OpenCodeGoUsageProvider(
             databaseURL: dbURL,
-            fiveHourTokenLimit: 10_000,
-            weeklyTokenLimit: 20_000
+            fiveHourDollarLimit: 12,
+            weeklyDollarLimit: 30
         )
 
         let usage = try await provider.fetchUsage()
 
         XCTAssertEqual(usage.service, .opencode)
-        XCTAssertEqual(usage.fiveHourUsage.used, 3_000, "Expected 5h window to include the two newest messages.")
-        XCTAssertEqual(usage.fiveHourUsage.total, 10_000)
-        XCTAssertEqual(usage.weeklyUsage?.used, 7_000, "Expected 7d window to include the three recent messages.")
-        XCTAssertEqual(usage.weeklyUsage?.total, 20_000)
-        XCTAssertEqual(usage.weeklyUsage?.remaining, 13_000)
-        XCTAssertEqual(usage.fiveHourUsage.remaining, 7_000)
+        XCTAssertEqual(usage.planName, "Go")
+        XCTAssertEqual(usage.fiveHourUsage.unit, .dollars)
+        XCTAssertEqual(
+            usage.fiveHourUsage.used,
+            3.75,
+            accuracy: 0.001,
+            "Expected 5h window to include only the two newest opencode-go messages."
+        )
+        XCTAssertEqual(usage.fiveHourUsage.total, 12)
+        XCTAssertEqual(usage.fiveHourUsage.remaining, 8.25, accuracy: 0.001)
+        XCTAssertEqual(usage.fiveHourUsage.remainingPercentage, 0.6875, accuracy: 0.001)
+        XCTAssertEqual(
+            usage.weeklyUsage?.used ?? 0,
+            7.75,
+            accuracy: 0.001,
+            "Expected 7d window to include the three recent opencode-go messages."
+        )
+        XCTAssertEqual(usage.weeklyUsage?.total, 30)
+        XCTAssertEqual(usage.weeklyUsage?.remaining ?? 0, 22.25, accuracy: 0.001)
     }
 
-    func testFetchUsageSkipsMessagesWithoutTokenData() async throws {
+    func testFetchUsageIgnoresMessagesWithoutCost() async throws {
         let dbURL = tempDirectory.appendingPathComponent("partial.db")
         try createDatabase(at: dbURL, createMessageTable: true)
 
@@ -105,29 +135,29 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-1 * 3600),
-            dataJSON: #"{"role":"user","content":"hello"}"#
+            dataJSON: #"{"role":"user","providerID":"opencode-go","cost":0}"#
         )
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-2 * 3600),
-            dataJSON: #"{"role":"assistant","tokens":{"total":500}}"#
+            dataJSON: #"{"role":"assistant","providerID":"opencode-go","cost":0.75}"#
         )
         try insertMessage(
             into: dbURL,
             timeCreated: now.addingTimeInterval(-3 * 3600),
-            dataJSON: #"{"role":"assistant","tokens":null}"#
+            dataJSON: #"{"role":"assistant","providerID":"opencode-go"}"#
         )
 
-        let provider = OpenCodeUsageProvider(
+        let provider = OpenCodeGoUsageProvider(
             databaseURL: dbURL,
-            fiveHourTokenLimit: 10_000,
-            weeklyTokenLimit: 20_000
+            fiveHourDollarLimit: 12,
+            weeklyDollarLimit: 30
         )
 
         let usage = try await provider.fetchUsage()
 
-        XCTAssertEqual(usage.fiveHourUsage.used, 500, "Expected only the message with token data to count.")
-        XCTAssertEqual(usage.weeklyUsage?.used, 500)
+        XCTAssertEqual(usage.fiveHourUsage.used, 0.75, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.used ?? 0, 0.75, accuracy: 0.001)
     }
 
     // MARK: - Test Database Helpers
@@ -136,7 +166,7 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         var handle: OpaquePointer?
         guard sqlite3_open(url.path, &handle) == SQLITE_OK, let handle else {
             sqlite3_close(handle)
-            throw NSError(domain: "OpenCodeUsageProviderTests", code: 1)
+            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 1)
         }
         defer { sqlite3_close(handle) }
 
@@ -153,11 +183,11 @@ final class OpenCodeUsageProviderTests: XCTestCase {
             var statement: OpaquePointer?
             guard sqlite3_prepare_v2(handle, createSQL, -1, &statement, nil) == SQLITE_OK else {
                 sqlite3_finalize(statement)
-                throw NSError(domain: "OpenCodeUsageProviderTests", code: 2)
+                throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 2)
             }
             defer { sqlite3_finalize(statement) }
             guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw NSError(domain: "OpenCodeUsageProviderTests", code: 3)
+                throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 3)
             }
         }
     }
@@ -165,9 +195,10 @@ final class OpenCodeUsageProviderTests: XCTestCase {
     private func insertMessage(
         into url: URL,
         timeCreated: Date,
-        totalTokens: Int
+        providerID: String,
+        cost: Double
     ) throws {
-        let json = #"{"role":"assistant","tokens":{"total":\#(totalTokens)}}"#
+        let json = #"{"role":"assistant","providerID":"\#(providerID)","cost":\#(cost)}"#
         try insertMessage(into: url, timeCreated: timeCreated, dataJSON: json)
     }
 
@@ -179,7 +210,7 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         var handle: OpaquePointer?
         guard sqlite3_open(url.path, &handle) == SQLITE_OK, let handle else {
             sqlite3_close(handle)
-            throw NSError(domain: "OpenCodeUsageProviderTests", code: 10)
+            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 10)
         }
         defer { sqlite3_close(handle) }
 
@@ -190,7 +221,7 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, insertSQL, -1, &statement, nil) == SQLITE_OK else {
             sqlite3_finalize(statement)
-            throw NSError(domain: "OpenCodeUsageProviderTests", code: 11)
+            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 11)
         }
         defer { sqlite3_finalize(statement) }
 
@@ -208,7 +239,7 @@ final class OpenCodeUsageProviderTests: XCTestCase {
         sqlite3_bind_text(statement, 5, json.utf8String, -1, transientDestructor)
 
         guard sqlite3_step(statement) == SQLITE_DONE else {
-            throw NSError(domain: "OpenCodeUsageProviderTests", code: 12)
+            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 12)
         }
     }
 }
