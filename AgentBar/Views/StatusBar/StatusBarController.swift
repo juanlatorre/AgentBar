@@ -18,7 +18,7 @@ final class StatusBarController {
 
     func setup() {
         if statusItem == nil {
-            statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            statusItem = NSStatusBar.system.statusItem(withLength: 140)
         }
 
         guard let button = statusItem?.button else {
@@ -31,7 +31,14 @@ final class StatusBarController {
 
         let barView = StatusBarUsageView(services: viewModel.usageData)
         let hosting = NSHostingView(rootView: barView)
-        hosting.frame = button.bounds.insetBy(dx: 3, dy: 0)
+        // Use a non-negative frame: with a fresh status item the button bounds can
+        // still be empty, and an inset could produce an invalid (invisible) frame.
+        hosting.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: max(button.bounds.width, 0),
+            height: max(button.bounds.height, 0)
+        )
         hosting.autoresizingMask = [.width, .height]
         button.addSubview(hosting)
         self.hostingView = hosting

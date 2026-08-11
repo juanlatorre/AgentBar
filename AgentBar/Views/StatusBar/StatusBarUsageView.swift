@@ -38,6 +38,7 @@ struct StatusBarUsageView: View {
                 }
             }
             .padding(.horizontal, 2)
+            .frame(maxWidth: .infinity)
         }
     }
 }
