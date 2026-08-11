@@ -2,6 +2,13 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 93: Support OpenCode usage, show remaining allowance, drop Buy Me a Coffee
+- **OpenCode usage provider**: New `OpenCodeUsageProvider` reads token usage from the local opencode SQLite database (`~/.local/share/opencode/opencode.db`, `message` table). Sums `tokens.total` from each message's JSON payload across the standard 5h/7d sliding windows (read-only via SQLite3, table missing → `.missingMessageTable`). Configurable limits in Settings (`opencodeEnabled`, `opencodeFiveHourLimit` 10M, `opencodeWeeklyLimit` 100M) wired through `UsageViewModel.buildProviders()`. `ServiceType.opencode` already existed; only the provider, settings section, and factory were missing.
+- **Remaining bars**: Added `UsageMetric.remaining` / `remainingPercentage`. `MiniBarView`, `SingleBarView` (menu bar), `MetricRow` (popover) now render remaining allowance instead of used: fill width, `remaining / total` text, and the % badge turn red below 20% remaining. `sortedForDisplay` and `StatusBarDisplayPlanner.rankedServices` rank by lowest remaining first (most critical on top). Usage history heatmaps unchanged (historical record).
+- **Buy Me a Coffee removed**: Removed the BMC button from `DetailPopoverView` (including the `openExternalURL` init dependency), the "Support" section and `hideBuyMeACoffeeButton` from `SettingsView`, `BuyMeACoffeeSettings` from `UserDefaultsExtensions`, the README badge, and the three BMC tests.
+- **Reproducible test plans**: `project.yml` now declares the `AgentBar` scheme with both `AgentBar.xctestplan` (default) and `AgentBarFull.xctestplan`, so `-testPlan AgentBarFull` works instead of relying on Xcode scheme autocreation.
+- All 289 tests passing
+
 ## Iteration 92: Align notification delivery and custom sound playback
 - **Notification ordering refactor**: `AgentNotifyNotificationService` now posts `UNNotificationRequest` first, then plays custom sound. This reduces timing skew between Notification Center card creation and audible feedback.
 - **Custom sound preflight**: Added `NotifySoundManager.canPlay(for:service:)` so notification content can choose between custom path (`sound=nil`) and system default (`.default`) before posting.

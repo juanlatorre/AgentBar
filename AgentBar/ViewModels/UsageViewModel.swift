@@ -168,6 +168,14 @@ final class UsageViewModel: ObservableObject {
             ))
         }
 
+        if isEnabled("opencodeEnabled", in: defaults) {
+            let opencodeLimits = opencodeTokenLimits(in: defaults)
+            providers.append(OpenCodeUsageProvider(
+                fiveHourTokenLimit: opencodeLimits.fiveHour,
+                weeklyTokenLimit: opencodeLimits.weekly
+            ))
+        }
+
         if isEnabled("zaiEnabled", in: defaults) {
             providers.append(ZaiUsageProvider())
         }
@@ -203,6 +211,13 @@ final class UsageViewModel: ObservableObject {
             return defaults.double(forKey: "cursorMonthlyLimit").nonZero ?? CursorPlan.pro.monthlyRequestEstimate
         }
         return plan.monthlyRequestEstimate
+    }
+
+    private static func opencodeTokenLimits(in defaults: UserDefaults) -> (fiveHour: Double, weekly: Double) {
+        (
+            defaults.double(forKey: "opencodeFiveHourLimit").nonZero ?? 10_000_000,
+            defaults.double(forKey: "opencodeWeeklyLimit").nonZero ?? 100_000_000
+        )
     }
 }
 

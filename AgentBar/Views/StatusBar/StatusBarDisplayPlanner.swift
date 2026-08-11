@@ -17,10 +17,11 @@ enum StatusBarDisplayPlanner {
         services
             .filter(\.isAvailable)
             .sorted { lhs, rhs in
+                // Lowest remaining allowance first (most critical on top).
                 let lhsScore = usageScore(lhs)
                 let rhsScore = usageScore(rhs)
                 if lhsScore != rhsScore {
-                    return lhsScore > rhsScore
+                    return lhsScore < rhsScore
                 }
 
                 let lhsRank = serviceOrder.firstIndex(of: lhs.service) ?? serviceOrder.count
@@ -34,7 +35,7 @@ enum StatusBarDisplayPlanner {
     }
 
     private static func usageScore(_ data: UsageData) -> Double {
-        let weekly = data.weeklyUsage?.percentage ?? 0
-        return max(data.fiveHourUsage.percentage, weekly)
+        let weekly = data.weeklyUsage?.remainingPercentage ?? 1
+        return min(data.fiveHourUsage.remainingPercentage, weekly)
     }
 }

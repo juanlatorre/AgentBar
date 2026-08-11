@@ -2,20 +2,12 @@ import SwiftUI
 
 struct DetailPopoverView: View {
     @ObservedObject var viewModel: UsageViewModel
-    @AppStorage(BuyMeACoffeeSettings.hideButtonKey) private var hideBuyMeACoffeeButton = false
-    private let openExternalURL: (URL) -> Void
     private var displayUsageData: [UsageData] {
         Self.sortedForDisplay(viewModel.usageData)
     }
 
-    init(
-        viewModel: UsageViewModel,
-        openExternalURL: @escaping (URL) -> Void = { url in
-            NSWorkspace.shared.open(url)
-        }
-    ) {
+    init(viewModel: UsageViewModel) {
         self.viewModel = viewModel
-        self.openExternalURL = openExternalURL
     }
 
     var body: some View {
@@ -52,17 +44,6 @@ struct DetailPopoverView: View {
 
             Spacer(minLength: 0)
 
-            if !hideBuyMeACoffeeButton {
-                // Buy Me a Coffee
-                Button(action: openBMC) {
-                    Label("Buy Me a Coffee", systemImage: "cup.and.saucer.fill")
-                        .font(.caption)
-                }
-                .buttonStyle(.bordered)
-                .foregroundStyle(.orange)
-                .frame(maxWidth: .infinity)
-            }
-
             // Footer
             Divider()
 
@@ -98,19 +79,14 @@ struct DetailPopoverView: View {
         SettingsWindowController.shared.show()
     }
 
-    private func openBMC() {
-        openExternalURL(Self.bmcSupportURL)
-    }
-
-    private static let bmcSupportURL = URL(string: "https://buymeacoffee.com/_scari")!
-
     static func sortedForDisplay(_ usageData: [UsageData]) -> [UsageData] {
         let serviceOrder: [ServiceType] = [.claude, .codex, .gemini, .copilot, .cursor, .opencode, .zai]
         return usageData.sorted { lhs, rhs in
-            let lhsScore = max(lhs.fiveHourUsage.percentage, lhs.weeklyUsage?.percentage ?? 0)
-            let rhsScore = max(rhs.fiveHourUsage.percentage, rhs.weeklyUsage?.percentage ?? 0)
+            // Lowest remaining allowance first (most critical at the top).
+            let lhsScore = min(lhs.fiveHourUsage.remainingPercentage, lhs.weeklyUsage?.remainingPercentage ?? 1)
+            let rhsScore = min(rhs.fiveHourUsage.remainingPercentage, rhs.weeklyUsage?.remainingPercentage ?? 1)
             if lhsScore != rhsScore {
-                return lhsScore > rhsScore
+                return lhsScore < rhsScore
             }
 
             let lhsRank = serviceOrder.firstIndex(of: lhs.service) ?? serviceOrder.count
@@ -118,16 +94,6 @@ struct DetailPopoverView: View {
             return lhsRank < rhsRank
         }
     }
-
-    #if DEBUG
-    func triggerBMCForTesting() {
-        openBMC()
-    }
-
-    func isBMCButtonVisibleForTesting() -> Bool {
-        !hideBuyMeACoffeeButton
-    }
-    #endif
 
     static func resolvedVersionString(from info: [String: Any]?) -> String {
         if let tag = normalizedString(info?["GitVersionTag"] as? String) {
@@ -203,10 +169,10 @@ struct MetricRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 30, alignment: .leading)
             if metric.unit == .percent {
-                Text(formatValue(metric.used, unit: metric.unit))
+                Text(formatValue(metric.remaining, unit: metric.unit))
                     .font(.caption.monospacedDigit())
             } else {
-                Text(formatValue(metric.used, unit: metric.unit))
+                Text(formatValue(metric.remaining, unit: metric.unit))
                     .font(.caption.monospacedDigit())
                 Text("/")
                     .font(.caption)
@@ -227,9 +193,9 @@ struct MetricRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("\(Int(metric.percentage * 100))%")
+            Text("\(Int(metric.remainingPercentage * 100))%")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(metric.percentage > 0.8 ? .red : .primary)
+                .foregroundStyle(metric.remainingPercentage < 0.2 ? .red : .primary)
                 .frame(width: 30, alignment: .trailing)
         }
     }
@@ -276,14 +242,14 @@ struct MiniBarView: View {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.gray.opacity(0.2))
-                if let weekly = data.weeklyUsage, weekly.percentage > 0 {
+                if let weekly = data.weeklyUsage, weekly.remainingPercentage > 0 {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(data.service.lightColor)
-                        .frame(width: geo.size.width * weekly.percentage)
+                        .frame(width: geo.size.width * weekly.remainingPercentage)
                 }
                 RoundedRectangle(cornerRadius: 2)
                     .fill(data.service.darkColor)
-                    .frame(width: geo.size.width * data.fiveHourUsage.percentage)
+                    .frame(width: geo.size.width * data.fiveHourUsage.remainingPercentage)
             }
         }
     }

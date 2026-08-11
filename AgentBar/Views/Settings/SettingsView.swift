@@ -40,8 +40,11 @@ struct SettingsView: View {
     @AppStorage("cursorPlan") private var cursorPlan: String = CursorPlan.pro.rawValue
     @AppStorage("cursorMonthlyLimit") private var cursorMonthlyLimit: Double = 500
 
+    @AppStorage("opencodeEnabled") private var opencodeEnabled = true
+    @AppStorage("opencodeFiveHourLimit") private var opencodeFiveHourLimit: Double = 10_000_000
+    @AppStorage("opencodeWeeklyLimit") private var opencodeWeeklyLimit: Double = 100_000_000
+
     @AppStorage("zaiEnabled") private var zaiEnabled = true
-    @AppStorage(BuyMeACoffeeSettings.hideButtonKey) private var hideBuyMeACoffeeButton = false
 
     @State private var selectedTab: SettingsTab = .usage
     #if AGENTBAR_NOTIFICATION_SOUNDS
@@ -294,6 +297,39 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("OpenCode") {
+                Toggle("Enabled", isOn: $opencodeEnabled)
+                    .onChange(of: opencodeEnabled) { _ in
+                        notifyLimitsChanged()
+                    }
+
+                HStack {
+                    Text("5h token limit:")
+                    TextField("", value: $opencodeFiveHourLimit, format: .number)
+                        .frame(width: 120)
+                    Text("tokens")
+                        .foregroundStyle(.secondary)
+                }
+                .onChange(of: opencodeFiveHourLimit) { _ in
+                    notifyLimitsChanged()
+                }
+
+                HStack {
+                    Text("Weekly token limit:")
+                    TextField("", value: $opencodeWeeklyLimit, format: .number)
+                        .frame(width: 120)
+                    Text("tokens")
+                        .foregroundStyle(.secondary)
+                }
+                .onChange(of: opencodeWeeklyLimit) { _ in
+                    notifyLimitsChanged()
+                }
+
+                Text("Usage is derived from the local opencode database at ~/.local/share/opencode/opencode.db")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Z.ai Coding Plan") {
                 Toggle("Enabled", isOn: $zaiEnabled)
                     .onChange(of: zaiEnabled) { _ in
@@ -316,13 +352,6 @@ struct SettingsView: View {
                     .disabled(!Self.canSaveToken(zaiAPIKey))
                 }
                 Text("Plan and limits are auto-detected from Z.ai API")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Support") {
-                Toggle("Hide Buy Me a Coffee button", isOn: $hideBuyMeACoffeeButton)
-                Text("If you've already donated and the BMC button feels distracting, you can hide it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

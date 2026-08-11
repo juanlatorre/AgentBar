@@ -14,8 +14,8 @@ struct StackedBarView: View {
     private var cycleTaskID: String {
         let signature = rankedServices
             .map { usage in
-                let fiveHour = Int((usage.fiveHourUsage.percentage * 1000).rounded())
-                let weekly = Int(((usage.weeklyUsage?.percentage ?? 0) * 1000).rounded())
+                let fiveHour = Int((usage.fiveHourUsage.remainingPercentage * 1000).rounded())
+                let weekly = Int(((usage.weeklyUsage?.remainingPercentage ?? 0) * 1000).rounded())
                 return "\(usage.service.rawValue):\(fiveHour):\(weekly)"
             }
             .joined(separator: "|")
@@ -127,18 +127,18 @@ struct SingleBarView: View {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(usage.service.darkColor.opacity(0.15))
 
-                    // Weekly usage (light color)
-                    if let weekly = usage.weeklyUsage, weekly.percentage > 0 {
+                    // Weekly remaining (light color)
+                    if let weekly = usage.weeklyUsage, weekly.remainingPercentage > 0 {
                         RoundedRectangle(cornerRadius: 1.5)
                             .fill(usage.service.lightColor)
-                            .frame(width: max(2, geo.size.width * weekly.percentage))
+                            .frame(width: max(2, geo.size.width * weekly.remainingPercentage))
                     }
 
-                    // 5-hour usage (dark color, overlaps weekly)
-                    if usage.fiveHourUsage.percentage > 0 {
+                    // 5-hour remaining (dark color, overlaps weekly)
+                    if usage.fiveHourUsage.remainingPercentage > 0 {
                         RoundedRectangle(cornerRadius: 1.5)
                             .fill(usage.service.darkColor)
-                            .frame(width: max(2, geo.size.width * usage.fiveHourUsage.percentage))
+                            .frame(width: max(2, geo.size.width * usage.fiveHourUsage.remainingPercentage))
                     }
                 }
             }

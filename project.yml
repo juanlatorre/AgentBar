@@ -76,3 +76,17 @@ targets:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG AGENTBAR_NOTIFICATION_SOUNDS"
+
+schemes:
+  AgentBar:
+    build:
+      targets:
+        AgentBar: all
+    test:
+      config: Debug
+      targets:
+        - AgentBarTests
+      testPlans:
+        - path: AgentBar.xctestplan
+          defaultPlan: true
+        - path: AgentBarFull.xctestplan

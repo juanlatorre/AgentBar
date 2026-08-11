@@ -59,41 +59,7 @@ final class DetailPopoverViewTests: XCTestCase {
         withExtendedLifetime(rendered.window) {}
     }
 
-    func testBuyMeACoffeeActionOpensExpectedURL() {
-        withBuyMeACoffeeHidden(false) {
-            let viewModel = UsageViewModel(providers: [])
-            var openedURLs: [URL] = []
-
-            let view = DetailPopoverView(viewModel: viewModel) { url in
-                openedURLs.append(url)
-            }
-            view.triggerBMCForTesting()
-
-            XCTAssertEqual(
-                openedURLs.first?.absoluteString,
-                "https://buymeacoffee.com/_scari",
-                "Expected tapping Buy Me a Coffee to attempt opening the BMC support URL."
-            )
-        }
-    }
-
-    func testBuyMeACoffeeButtonCanBeHiddenFromSettings() {
-        withBuyMeACoffeeHidden(true) {
-            let viewModel = UsageViewModel(providers: [])
-            let view = DetailPopoverView(viewModel: viewModel)
-            XCTAssertFalse(view.isBMCButtonVisibleForTesting())
-        }
-    }
-
-    func testBuyMeACoffeeButtonVisibleWhenNotHidden() {
-        withBuyMeACoffeeHidden(false) {
-            let viewModel = UsageViewModel(providers: [])
-            let view = DetailPopoverView(viewModel: viewModel)
-            XCTAssertTrue(view.isBMCButtonVisibleForTesting())
-        }
-    }
-
-    func testSortedForDisplayOrdersByHighestUsageDescending() {
+    func testSortedForDisplayOrdersByLowestRemainingFirst() {
         let input = [
             UsageData.mock(service: .claude, fiveHourPct: 0.20, weeklyPct: 0.40),
             UsageData.mock(service: .codex, fiveHourPct: 0.90, weeklyPct: 0.10),
@@ -174,10 +140,9 @@ final class DetailPopoverViewTests: XCTestCase {
     }
 
     private func renderPopover(
-        viewModel: UsageViewModel,
-        openExternalURL: @escaping (URL) -> Void = { _ in }
+        viewModel: UsageViewModel
     ) -> (window: NSWindow, hostingView: NSHostingView<DetailPopoverView>) {
-        let rootView = DetailPopoverView(viewModel: viewModel, openExternalURL: openExternalURL)
+        let rootView = DetailPopoverView(viewModel: viewModel)
         let hostingView = NSHostingView(rootView: rootView)
         let frame = NSRect(x: 0, y: 0, width: 320, height: 480)
         hostingView.frame = frame
@@ -241,23 +206,4 @@ final class DetailPopoverViewTests: XCTestCase {
         }
         return nil
     }
-
-    private func withBuyMeACoffeeHidden(
-        _ isHidden: Bool,
-        testBody: () -> Void
-    ) {
-        let defaults = UserDefaults.standard
-        let key = BuyMeACoffeeSettings.hideButtonKey
-        let previousValue = defaults.object(forKey: key)
-        defaults.set(isHidden, forKey: key)
-        defer {
-            if let previousValue {
-                defaults.set(previousValue, forKey: key)
-            } else {
-                defaults.removeObject(forKey: key)
-            }
-        }
-        testBody()
-    }
-
 }

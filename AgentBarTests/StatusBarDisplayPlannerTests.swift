@@ -26,7 +26,7 @@ final class ServiceTypeColorTests: XCTestCase {
 }
 
 final class StatusBarDisplayPlannerTests: XCTestCase {
-    func testRanksServicesByHighestUsageScoreDescending() {
+    func testRanksServicesByLowestRemainingFirst() {
         let services = [
             makeUsage(service: .claude, fiveHourPct: 0.20, weeklyPct: 0.40),
             makeUsage(service: .codex, fiveHourPct: 0.90, weeklyPct: 0.10),
