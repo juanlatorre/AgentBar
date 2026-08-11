@@ -3,6 +3,7 @@ import Foundation
 enum DateUtils {
     static let fiveHourInterval: TimeInterval = 5 * 3600
     static let weeklyInterval: TimeInterval = 7 * 24 * 3600
+    static let monthlyInterval: TimeInterval = 30 * 24 * 3600
 
     static func fiveHourWindowStart(relativeTo now: Date = Date()) -> Date {
         now.addingTimeInterval(-fiveHourInterval)
@@ -10,6 +11,10 @@ enum DateUtils {
 
     static func weeklyWindowStart(relativeTo now: Date = Date()) -> Date {
         now.addingTimeInterval(-weeklyInterval)
+    }
+
+    static func monthlyWindowStart(relativeTo now: Date = Date()) -> Date {
+        now.addingTimeInterval(-monthlyInterval)
     }
 
     static func parseISO8601(_ string: String) -> Date? {

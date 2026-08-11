@@ -36,25 +36,29 @@ enum OpenCodeGoUsageError: Error, Sendable {
 /// Each message row stores `time_created` (epoch milliseconds) and a JSON
 /// payload in `data` that includes `providerID` and `cost` (USD). Only
 /// messages served through the `opencode-go` provider are counted, summed
-/// across the standard 5h / 7d sliding windows. Limits default to the
-/// published Go plan values ($12 / $30) and are configurable in Settings.
+/// across the three plan windows (5h / weekly / monthly). Limits default to
+/// the published Go plan values ($12 / $30 / $60) and are configurable in
+/// Settings.
 final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable {
     let serviceType: ServiceType = .opencode
 
     private let databaseURL: URL
     private let fiveHourDollarLimit: Double
     private let weeklyDollarLimit: Double
+    private let monthlyDollarLimit: Double
 
     init(
         databaseURL: URL? = nil,
         fiveHourDollarLimit: Double = 12,
-        weeklyDollarLimit: Double = 30
+        weeklyDollarLimit: Double = 30,
+        monthlyDollarLimit: Double = 60
     ) {
         let home = FileManager.default.homeDirectoryForCurrentUser
         self.databaseURL = databaseURL
             ?? home.appendingPathComponent(".local/share/opencode/opencode.db")
         self.fiveHourDollarLimit = fiveHourDollarLimit
         self.weeklyDollarLimit = weeklyDollarLimit
+        self.monthlyDollarLimit = monthlyDollarLimit
     }
 
     func isConfigured() async -> Bool {
@@ -79,6 +83,12 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
                 unit: .dollars,
                 resetTime: nil
             ),
+            monthlyUsage: UsageMetric(
+                used: totals.monthly,
+                total: monthlyDollarLimit,
+                unit: .dollars,
+                resetTime: nil
+            ),
             lastUpdated: now,
             isAvailable: true,
             planName: "Go"
@@ -87,7 +97,7 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
 
     // MARK: - Database Reading
 
-    private func sumCostFromDatabase(now: Date) throws -> (fiveHour: Double, weekly: Double) {
+    private func sumCostFromDatabase(now: Date) throws -> (fiveHour: Double, weekly: Double, monthly: Double) {
         guard FileManager.default.fileExists(atPath: databaseURL.path) else {
             throw OpenCodeGoUsageError.databaseUnavailable
         }
@@ -101,8 +111,8 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
         }
         defer { sqlite3_close(handle) }
 
-        // One query for the 7d window; the 5h split happens in Swift.
-        let weeklyCutoffMillis = Int64(DateUtils.weeklyWindowStart(relativeTo: now)
+        // One query for the 30d window; the 5h / 7d splits happen in Swift.
+        let monthlyCutoffMillis = Int64(DateUtils.monthlyWindowStart(relativeTo: now)
             .timeIntervalSince1970 * 1000)
 
         let query = """
@@ -116,14 +126,16 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
         }
         defer { sqlite3_finalize(statement) }
 
-        guard sqlite3_bind_int64(statement, 1, weeklyCutoffMillis) == SQLITE_OK else {
+        guard sqlite3_bind_int64(statement, 1, monthlyCutoffMillis) == SQLITE_OK else {
             throw OpenCodeGoUsageError.databaseUnavailable
         }
 
         let fiveHourCutoff = DateUtils.fiveHourWindowStart(relativeTo: now)
+        let weeklyCutoff = DateUtils.weeklyWindowStart(relativeTo: now)
         let decoder = JSONDecoder()
         var fiveHourTotal: Double = 0
         var weeklyTotal: Double = 0
+        var monthlyTotal: Double = 0
 
         while sqlite3_step(statement) == SQLITE_ROW {
             let createdMillis = sqlite3_column_int64(statement, 0)
@@ -140,9 +152,12 @@ final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable 
             if messageDate >= fiveHourCutoff {
                 fiveHourTotal += cost
             }
-            weeklyTotal += cost
+            if messageDate >= weeklyCutoff {
+                weeklyTotal += cost
+            }
+            monthlyTotal += cost
         }
 
-        return (fiveHourTotal, weeklyTotal)
+        return (fiveHourTotal, weeklyTotal, monthlyTotal)
     }
 }

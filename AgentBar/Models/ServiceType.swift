@@ -61,6 +61,14 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
         }
     }
 
+    /// Label for the optional monthly window (e.g. OpenCode Go's $60/month limit).
+    var monthlyLabel: String? {
+        switch self {
+        case .opencode: "Mo"
+        default: nil
+        }
+    }
+
     /// Whether this service uses the standard 5h / 7d dual-window structure.
     var hasFiveHourSevenDayStructure: Bool {
         fiveHourLabel == "5h" && weeklyLabel == "7d"

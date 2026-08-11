@@ -2,6 +2,12 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 97: OpenCode Go monthly window + third-window support
+- **Monthly limit**: OpenCode Go's dashboard tracks three windows (5h / weekly / monthly), matching the published $12 / $30 / $60 limits. `UsageData` gained an optional `monthlyUsage` metric (default nil) and `ServiceType.monthlyLabel` ("Mo" for OpenCode). `OpenCodeGoUsageProvider` now sums message costs across 5h / 7d / 30d (`DateUtils.monthlyWindowStart`) and Settings gained a "Monthly limit" field (`opencodeGoMonthlyLimit`).
+- **UI**: ServiceDetailRow renders a third MetricRow when present; MiniBarView/SingleBarView draw three remaining layers (monthly lightest via 0.55 opacity, weekly, 5h dark); ranking in `sortedForDisplay` / `StatusBarDisplayPlanner.usageScore` takes the min of all three remaining percentages; the scroll-loop signature includes the monthly value.
+- **Flaky test hardening**: `testCLIProcessExecutorTimeoutForceKillsTermResistantProcess` raised its command timeout 0.3s → 1.5s so the shell reliably writes the PID file under parallel test load (it failed intermittently, unrelated to these changes).
+- All 290 tests passing
+
 ## Iteration 96: Codex single weekly window (no more 5h limit)
 - **Codex/ChatGPT weekly-only**: OpenAI's rate-limit payload changed — current sessions expose `rate_limits.primary` with `window_minutes: 10080` (7 days) and no secondary window; the 5-hour limit no longer exists (verified against actual `~/.codex/sessions` data: recent entries are `primary 10080 / secondary None`, 5h windows only appear in old history). `CodexUsageProvider` now reports a single weekly metric in `fiveHourUsage` with `weeklyUsage = nil` (same pattern as Gemini/Copilot/Cursor). `weeklyWindow(from:)` picks the 7-day window from `primary` (current format) or `secondary` (legacy sessions), keeping multi-`limit_id` aggregation, stale-reset resolution, token-summing fallback, and the weekly cache (`codexUsageCache.weekly`).
 - **UI/plans updated**: Codex row label is now "7d", the 5h token-limit field was removed from Settings (only the weekly limit remains), `CodexPlan.fiveHourTokenLimit` was deleted, and `UsageViewModel` builds the provider with only `weeklyTokenLimit`. Usage-history tests that relied on Codex's secondary window now use Claude (still 5h/7d).

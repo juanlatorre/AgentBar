@@ -83,8 +83,16 @@ struct DetailPopoverView: View {
         let serviceOrder: [ServiceType] = [.claude, .codex, .gemini, .copilot, .cursor, .opencode, .zai]
         return usageData.sorted { lhs, rhs in
             // Lowest remaining allowance first (most critical at the top).
-            let lhsScore = min(lhs.fiveHourUsage.remainingPercentage, lhs.weeklyUsage?.remainingPercentage ?? 1)
-            let rhsScore = min(rhs.fiveHourUsage.remainingPercentage, rhs.weeklyUsage?.remainingPercentage ?? 1)
+            let lhsScore = min(
+                lhs.fiveHourUsage.remainingPercentage,
+                lhs.weeklyUsage?.remainingPercentage ?? 1,
+                lhs.monthlyUsage?.remainingPercentage ?? 1
+            )
+            let rhsScore = min(
+                rhs.fiveHourUsage.remainingPercentage,
+                rhs.weeklyUsage?.remainingPercentage ?? 1,
+                rhs.monthlyUsage?.remainingPercentage ?? 1
+            )
             if lhsScore != rhsScore {
                 return lhsScore < rhsScore
             }
@@ -152,6 +160,9 @@ struct ServiceDetailRow: View {
             MetricRow(label: data.service.fiveHourLabel, metric: data.fiveHourUsage)
             if let weekly = data.weeklyUsage {
                 MetricRow(label: data.service.weeklyLabel, metric: weekly)
+            }
+            if let monthly = data.monthlyUsage {
+                MetricRow(label: data.service.monthlyLabel ?? "Mo", metric: monthly)
             }
         }
         .padding(.vertical, 4)
@@ -242,6 +253,11 @@ struct MiniBarView: View {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.gray.opacity(0.2))
+                if let monthly = data.monthlyUsage, monthly.remainingPercentage > 0 {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(data.service.lightColor.opacity(0.55))
+                        .frame(width: geo.size.width * monthly.remainingPercentage)
+                }
                 if let weekly = data.weeklyUsage, weekly.remainingPercentage > 0 {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(data.service.lightColor)

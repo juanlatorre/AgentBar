@@ -16,7 +16,8 @@ struct StackedBarView: View {
             .map { usage in
                 let fiveHour = Int((usage.fiveHourUsage.remainingPercentage * 1000).rounded())
                 let weekly = Int(((usage.weeklyUsage?.remainingPercentage ?? 0) * 1000).rounded())
-                return "\(usage.service.rawValue):\(fiveHour):\(weekly)"
+                let monthly = Int(((usage.monthlyUsage?.remainingPercentage ?? 0) * 1000).rounded())
+                return "\(usage.service.rawValue):\(fiveHour):\(weekly):\(monthly)"
             }
             .joined(separator: "|")
         return "\(signature)#hover:\(isHovered ? 1 : 0)"
@@ -126,6 +127,13 @@ struct SingleBarView: View {
                     // Background — visible outline when empty
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(usage.service.darkColor.opacity(0.15))
+
+                    // Monthly remaining (lightest color)
+                    if let monthly = usage.monthlyUsage, monthly.remainingPercentage > 0 {
+                        RoundedRectangle(cornerRadius: 1.5)
+                            .fill(usage.service.lightColor.opacity(0.55))
+                            .frame(width: max(2, geo.size.width * monthly.remainingPercentage))
+                    }
 
                     // Weekly remaining (light color)
                     if let weekly = usage.weeklyUsage, weekly.remainingPercentage > 0 {

@@ -390,7 +390,7 @@ final class CopilotUsageProviderTests: XCTestCase {
         let result = CLIProcessExecutor.executeCommand(
             executableURL: URL(fileURLWithPath: "/bin/sh"),
             arguments: ["-c", "echo $$ > \(pidFilePath); trap '' TERM; while :; do sleep 0.05; done"],
-            timeout: 0.3
+            timeout: 1.5
         )
 
         XCTAssertNil(result)

@@ -5,6 +5,7 @@ struct UsageData: Identifiable, Sendable {
     let service: ServiceType
     let fiveHourUsage: UsageMetric
     let weeklyUsage: UsageMetric?
+    let monthlyUsage: UsageMetric?
     let lastUpdated: Date
     let isAvailable: Bool
     let planName: String?
@@ -13,6 +14,7 @@ struct UsageData: Identifiable, Sendable {
         service: ServiceType,
         fiveHourUsage: UsageMetric,
         weeklyUsage: UsageMetric?,
+        monthlyUsage: UsageMetric? = nil,
         lastUpdated: Date,
         isAvailable: Bool,
         planName: String? = nil
@@ -20,6 +22,7 @@ struct UsageData: Identifiable, Sendable {
         self.service = service
         self.fiveHourUsage = fiveHourUsage
         self.weeklyUsage = weeklyUsage
+        self.monthlyUsage = monthlyUsage
         self.lastUpdated = lastUpdated
         self.isAvailable = isAvailable
         self.planName = planName

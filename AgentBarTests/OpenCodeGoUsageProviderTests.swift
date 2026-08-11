@@ -79,7 +79,13 @@ final class OpenCodeGoUsageProviderTests: XCTestCase {
         )
         try insertMessage(
             into: dbURL,
-            timeCreated: now.addingTimeInterval(-8 * 24 * 3600), // outside both windows
+            timeCreated: now.addingTimeInterval(-8 * 24 * 3600), // inside monthly, outside weekly/5h
+            providerID: "opencode-go",
+            cost: 6.00
+        )
+        try insertMessage(
+            into: dbURL,
+            timeCreated: now.addingTimeInterval(-35 * 24 * 3600), // outside all windows
             providerID: "opencode-go",
             cost: 8.00
         )
@@ -100,7 +106,8 @@ final class OpenCodeGoUsageProviderTests: XCTestCase {
         let provider = OpenCodeGoUsageProvider(
             databaseURL: dbURL,
             fiveHourDollarLimit: 12,
-            weeklyDollarLimit: 30
+            weeklyDollarLimit: 30,
+            monthlyDollarLimit: 60
         )
 
         let usage = try await provider.fetchUsage()
@@ -125,6 +132,14 @@ final class OpenCodeGoUsageProviderTests: XCTestCase {
         )
         XCTAssertEqual(usage.weeklyUsage?.total, 30)
         XCTAssertEqual(usage.weeklyUsage?.remaining ?? 0, 22.25, accuracy: 0.001)
+        XCTAssertEqual(
+            usage.monthlyUsage?.used ?? 0,
+            13.75,
+            accuracy: 0.001,
+            "Expected 30d window to include the four recent opencode-go messages."
+        )
+        XCTAssertEqual(usage.monthlyUsage?.total, 60)
+        XCTAssertEqual(usage.monthlyUsage?.remaining ?? 0, 46.25, accuracy: 0.001)
     }
 
     func testFetchUsageIgnoresMessagesWithoutCost() async throws {

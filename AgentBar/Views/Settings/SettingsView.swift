@@ -42,6 +42,7 @@ struct SettingsView: View {
     @AppStorage("opencodeGoEnabled") private var opencodeGoEnabled = true
     @AppStorage("opencodeGoFiveHourLimit") private var opencodeGoFiveHourLimit: Double = 12
     @AppStorage("opencodeGoWeeklyLimit") private var opencodeGoWeeklyLimit: Double = 30
+    @AppStorage("opencodeGoMonthlyLimit") private var opencodeGoMonthlyLimit: Double = 60
 
     @AppStorage("zaiEnabled") private var zaiEnabled = true
 
@@ -309,7 +310,18 @@ struct SettingsView: View {
                     notifyLimitsChanged()
                 }
 
-                Text("OpenCode Go plan limits are $12/5h and $30/week. Usage is derived from local opencode messages at ~/.local/share/opencode/opencode.db")
+                HStack {
+                    Text("Monthly limit:")
+                    TextField("", value: $opencodeGoMonthlyLimit, format: .number)
+                        .frame(width: 120)
+                    Text("USD")
+                        .foregroundStyle(.secondary)
+                }
+                .onChange(of: opencodeGoMonthlyLimit) { _ in
+                    notifyLimitsChanged()
+                }
+
+                Text("OpenCode Go plan limits are $12/5h, $30/week and $60/month. Usage is derived from local opencode messages at ~/.local/share/opencode/opencode.db")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

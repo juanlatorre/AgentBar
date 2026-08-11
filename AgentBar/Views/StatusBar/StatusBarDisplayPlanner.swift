@@ -36,6 +36,7 @@ enum StatusBarDisplayPlanner {
 
     private static func usageScore(_ data: UsageData) -> Double {
         let weekly = data.weeklyUsage?.remainingPercentage ?? 1
-        return min(data.fiveHourUsage.remainingPercentage, weekly)
+        let monthly = data.monthlyUsage?.remainingPercentage ?? 1
+        return min(data.fiveHourUsage.remainingPercentage, weekly, monthly)
     }
 }
