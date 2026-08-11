@@ -82,19 +82,19 @@ struct DetailPopoverView: View {
     static func sortedForDisplay(_ usageData: [UsageData]) -> [UsageData] {
         let serviceOrder: [ServiceType] = [.claude, .codex, .gemini, .copilot, .cursor, .opencode, .zai]
         return usageData.sorted { lhs, rhs in
-            // Highest usage first (most consumed at the top).
-            let lhsScore = max(
-                lhs.fiveHourUsage.percentage,
-                lhs.weeklyUsage?.percentage ?? 0,
-                lhs.monthlyUsage?.percentage ?? 0
+            // Lowest remaining allowance first (most critical at the top).
+            let lhsScore = min(
+                lhs.fiveHourUsage.remainingPercentage,
+                lhs.weeklyUsage?.remainingPercentage ?? 1,
+                lhs.monthlyUsage?.remainingPercentage ?? 1
             )
-            let rhsScore = max(
-                rhs.fiveHourUsage.percentage,
-                rhs.weeklyUsage?.percentage ?? 0,
-                rhs.monthlyUsage?.percentage ?? 0
+            let rhsScore = min(
+                rhs.fiveHourUsage.remainingPercentage,
+                rhs.weeklyUsage?.remainingPercentage ?? 1,
+                rhs.monthlyUsage?.remainingPercentage ?? 1
             )
             if lhsScore != rhsScore {
-                return lhsScore > rhsScore
+                return lhsScore < rhsScore
             }
 
             let lhsRank = serviceOrder.firstIndex(of: lhs.service) ?? serviceOrder.count
@@ -180,10 +180,10 @@ struct MetricRow: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 30, alignment: .leading)
             if metric.unit == .percent {
-                Text(formatValue(metric.used, unit: metric.unit))
+                Text(formatValue(metric.remaining, unit: metric.unit))
                     .font(.caption.monospacedDigit())
             } else {
-                Text(formatValue(metric.used, unit: metric.unit))
+                Text(formatValue(metric.remaining, unit: metric.unit))
                     .font(.caption.monospacedDigit())
                 Text("/")
                     .font(.caption)
@@ -204,9 +204,9 @@ struct MetricRow: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            Text("\(Int(metric.percentage * 100))%")
+            Text("\(Int(metric.remainingPercentage * 100))%")
                 .font(.caption.monospacedDigit())
-                .foregroundStyle(metric.percentage > 0.8 ? .red : .primary)
+                .foregroundStyle(metric.remainingPercentage < 0.2 ? .red : .primary)
                 .frame(width: 30, alignment: .trailing)
         }
     }
@@ -253,19 +253,19 @@ struct MiniBarView: View {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color.gray.opacity(0.2))
-                if let monthly = data.monthlyUsage, monthly.percentage > 0 {
+                if let monthly = data.monthlyUsage, monthly.remainingPercentage > 0 {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(data.service.lightColor.opacity(0.55))
-                        .frame(width: geo.size.width * monthly.percentage)
+                        .frame(width: geo.size.width * monthly.remainingPercentage)
                 }
-                if let weekly = data.weeklyUsage, weekly.percentage > 0 {
+                if let weekly = data.weeklyUsage, weekly.remainingPercentage > 0 {
                     RoundedRectangle(cornerRadius: 2)
                         .fill(data.service.lightColor)
-                        .frame(width: geo.size.width * weekly.percentage)
+                        .frame(width: geo.size.width * weekly.remainingPercentage)
                 }
                 RoundedRectangle(cornerRadius: 2)
                     .fill(data.service.darkColor)
-                    .frame(width: geo.size.width * data.fiveHourUsage.percentage)
+                    .frame(width: geo.size.width * data.fiveHourUsage.remainingPercentage)
             }
         }
     }

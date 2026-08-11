@@ -47,12 +47,12 @@ private struct ServiceUsageStack: View {
     let usage: UsageData
 
     private var fiveHourPercent: String {
-        percentString(usage.fiveHourUsage.percentage)
+        percentString(usage.fiveHourUsage.remainingPercentage)
     }
 
     private var weeklyPercent: String {
         guard let weekly = usage.weeklyUsage else { return "" }
-        return percentString(weekly.percentage)
+        return percentString(weekly.remainingPercentage)
     }
 
     var body: some View {

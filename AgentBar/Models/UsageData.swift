@@ -40,6 +40,17 @@ struct UsageMetric: Sendable {
         return min(used / total, 1.0)
     }
 
+    /// Amount of allowance left in the current window (never negative).
+    var remaining: Double {
+        max(total - used, 0)
+    }
+
+    /// Fraction of allowance still available, clamped to 0...1.
+    var remainingPercentage: Double {
+        guard total > 0 else { return 0 }
+        return min(max(remaining / total, 0), 1.0)
+    }
+
     static let zero = UsageMetric(used: 0, total: 0, unit: .tokens, resetTime: nil)
 }
 

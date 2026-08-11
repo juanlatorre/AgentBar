@@ -35,21 +35,21 @@ final class OpenCodeGoUsageProviderTests: XCTestCase {
         XCTAssertEqual(usage.fiveHourUsage.unit, .percent)
         XCTAssertEqual(usage.fiveHourUsage.used, 0, accuracy: 0.001)
         XCTAssertEqual(usage.fiveHourUsage.total, 100)
-        XCTAssertEqual(usage.fiveHourUsage.percentage, 0.0, accuracy: 0.001)
+        XCTAssertEqual(usage.fiveHourUsage.remainingPercentage, 1.0, accuracy: 0.001)
         XCTAssertEqual(
             usage.fiveHourUsage.resetTime?.timeIntervalSinceNow ?? 0,
             13561,
             accuracy: 5
         )
         XCTAssertEqual(usage.weeklyUsage?.used ?? 0, 69, accuracy: 0.001)
-        XCTAssertEqual(usage.weeklyUsage?.percentage ?? 0, 0.69, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.remainingPercentage ?? 0, 0.31, accuracy: 0.001)
         XCTAssertEqual(
             usage.weeklyUsage?.resetTime?.timeIntervalSinceNow ?? 0,
             441666,
             accuracy: 5
         )
         XCTAssertEqual(usage.monthlyUsage?.used ?? 0, 49, accuracy: 0.001)
-        XCTAssertEqual(usage.monthlyUsage?.percentage ?? 0, 0.49, accuracy: 0.001)
+        XCTAssertEqual(usage.monthlyUsage?.remainingPercentage ?? 0, 0.51, accuracy: 0.001)
         XCTAssertEqual(
             usage.monthlyUsage?.resetTime?.timeIntervalSinceNow ?? 0,
             2068758,
@@ -76,7 +76,7 @@ final class OpenCodeGoUsageProviderTests: XCTestCase {
 
         XCTAssertEqual(usage.fiveHourUsage.used, 0, accuracy: 0.001)
         XCTAssertEqual(usage.weeklyUsage?.used ?? 0, 69, accuracy: 0.001)
-        XCTAssertEqual(usage.weeklyUsage?.percentage ?? 0, 0.69, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.remainingPercentage ?? 0, 0.31, accuracy: 0.001)
         XCTAssertEqual(usage.monthlyUsage?.used ?? 0, 49, accuracy: 0.001)
         XCTAssertNotNil(usage.fiveHourUsage.resetTime)
         XCTAssertNotNil(usage.weeklyUsage?.resetTime)

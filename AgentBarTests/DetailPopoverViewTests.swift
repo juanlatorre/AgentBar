@@ -59,7 +59,7 @@ final class DetailPopoverViewTests: XCTestCase {
         withExtendedLifetime(rendered.window) {}
     }
 
-    func testSortedForDisplayOrdersByHighestUsageDescending() {
+    func testSortedForDisplayOrdersByLowestRemainingFirst() {
         let input = [
             UsageData.mock(service: .claude, fiveHourPct: 0.20, weeklyPct: 0.40),
             UsageData.mock(service: .codex, fiveHourPct: 0.90, weeklyPct: 0.10),

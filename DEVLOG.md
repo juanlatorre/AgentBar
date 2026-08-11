@@ -2,6 +2,10 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 106: Back to remaining allowance everywhere
+- **User preference**: after trying used percentages, the user prefers remaining — restored `UsageMetric.remaining`/`remainingPercentage` and switched the menu bar, metric rows, mini bars and ranking back to remaining (red below 20% remaining, most-critical-first ordering). Tests assert remaining percentages again.
+- All 287 tests passing
+
 ## Iteration 105: Show used percentages like the OpenCode Go dashboard
 - **Reversal of the remaining toggle**: after comparing with the OpenCode Go dashboard (which shows used %), the app now displays consumed percentages everywhere: menu bar ("OC 0% / 69%"), MetricRow values and badges, MiniBarView fills, and the popover ranking (highest usage first). `UsageMetric.remaining` / `remainingPercentage` were removed; tests assert `percentage` (0.0/0.69/0.49).
 - All 287 tests passing
