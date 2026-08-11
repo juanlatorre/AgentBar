@@ -2,6 +2,13 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 104: OpenCode Go usage from the official API
+- **Wrong local data**: the previous provider summed `cost` from local opencode messages, but no `opencode-go` messages exist locally — the plan's usage is tracked server-side (dashboard showed Weekly 69% / Monthly 49% while the app showed $0).
+- **Official endpoint found** (reverse-engineered from the opencode binary): `GET https://opencode.ai/zen/go/v1/usage` with `Authorization: Bearer <plan key>` returns `{useBalance, rollingUsage{usagePercent, resetInSec}, weeklyUsage, monthlyUsage}` — verified to match the user's dashboard exactly.
+- **Provider rewritten**: `OpenCodeGoUsageProvider` now fetches from that endpoint, reading the plan key from `~/.local/share/opencode/auth.json` (`opencode-go.key`, testable via injected `credentialProvider`/`authFileURL`). Metrics are percent-based (used = server %, total = 100) with `resetTime = now + resetInSec`; 60s cache like Zai. Settings dropped the dollar-limit fields (limits come from the server); the row still shows plan "Go" and the menu bar reflects real remaining percentages.
+- **Tests rewritten** with a URLProtocol mock (6 tests: parsing, missing windows → 0, missing key throws, TTL cache, credential provider, auth file parsing).
+- All 286 tests passing
+
 ## Iteration 103: Center single-percentage blocks in the menu bar
 - **Fix**: Codex (one percentage) no longer renders an empty second line that pushed its value to the top — the weekly Text is conditional, and the outer HStack uses `.center` alignment so single-line blocks sit vertically centered between Claude/OpenCode's two-line stacks.
 - All 284 tests passing

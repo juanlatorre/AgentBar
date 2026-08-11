@@ -40,9 +40,6 @@ struct SettingsView: View {
     @AppStorage("cursorMonthlyLimit") private var cursorMonthlyLimit: Double = 500
 
     @AppStorage("opencodeGoEnabled") private var opencodeGoEnabled = true
-    @AppStorage("opencodeGoFiveHourLimit") private var opencodeGoFiveHourLimit: Double = 12
-    @AppStorage("opencodeGoWeeklyLimit") private var opencodeGoWeeklyLimit: Double = 30
-    @AppStorage("opencodeGoMonthlyLimit") private var opencodeGoMonthlyLimit: Double = 60
 
     @AppStorage("zaiEnabled") private var zaiEnabled = true
 
@@ -288,40 +285,7 @@ struct SettingsView: View {
                         notifyLimitsChanged()
                     }
 
-                HStack {
-                    Text("5h limit:")
-                    TextField("", value: $opencodeGoFiveHourLimit, format: .number)
-                        .frame(width: 120)
-                    Text("USD")
-                        .foregroundStyle(.secondary)
-                }
-                .onChange(of: opencodeGoFiveHourLimit) { _ in
-                    notifyLimitsChanged()
-                }
-
-                HStack {
-                    Text("Weekly limit:")
-                    TextField("", value: $opencodeGoWeeklyLimit, format: .number)
-                        .frame(width: 120)
-                    Text("USD")
-                        .foregroundStyle(.secondary)
-                }
-                .onChange(of: opencodeGoWeeklyLimit) { _ in
-                    notifyLimitsChanged()
-                }
-
-                HStack {
-                    Text("Monthly limit:")
-                    TextField("", value: $opencodeGoMonthlyLimit, format: .number)
-                        .frame(width: 120)
-                    Text("USD")
-                        .foregroundStyle(.secondary)
-                }
-                .onChange(of: opencodeGoMonthlyLimit) { _ in
-                    notifyLimitsChanged()
-                }
-
-                Text("OpenCode Go plan limits are $12/5h, $30/week and $60/month. Usage is derived from local opencode messages at ~/.local/share/opencode/opencode.db")
+                Text("Usage is fetched from the OpenCode Go API (rolling 5h / weekly / monthly percentages) using the plan key from ~/.local/share/opencode/auth.json")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

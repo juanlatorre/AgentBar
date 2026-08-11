@@ -1,163 +1,193 @@
 import Foundation
-import SQLite3
 
-// MARK: - OpenCode Go Message Record Models (matches actual opencode SQLite database)
+// MARK: - OpenCode Go Usage API Response (actual format, verified 2026-08)
 
-/// Subset of the `message` row JSON payload stored in `~/.local/share/opencode/opencode.db`.
-///
-/// OpenCode Go messages carry `providerID == "opencode-go"` and a per-request
-/// `cost` in USD, which is what the plan's usage limits are denominated in
-/// (see https://opencode.ai/docs/go: 5h limit $12, weekly limit $30, monthly $60).
-struct OpenCodeGoMessageRecord: Decodable, Sendable {
-    struct Model: Decodable, Sendable {
-        let providerID: String?
+/// GET https://opencode.ai/zen/go/v1/usage with the plan API key returns:
+/// {"useBalance":false,
+///  "rollingUsage":{"status":"ok","resetInSec":13561,"usagePercent":0},
+///  "weeklyUsage":{"status":"ok","resetInSec":441666,"usagePercent":69},
+///  "monthlyUsage":{"status":"ok","resetInSec":2068758,"usagePercent":49}}
+struct OpenCodeGoUsageResponse: Decodable, Sendable {
+    let useBalance: Bool?
+    let rollingUsage: OpenCodeGoUsageWindow?
+    let weeklyUsage: OpenCodeGoUsageWindow?
+    let monthlyUsage: OpenCodeGoUsageWindow?
+}
+
+struct OpenCodeGoUsageWindow: Decodable, Sendable {
+    let status: String?
+    let resetInSec: Int?
+    let usagePercent: Double?
+}
+
+/// The OpenCode Go plan key lives in the local opencode auth store:
+/// {"opencode-go": {"type": "api", "key": "sk-..."}}
+private struct OpenCodeAuthFile: Decodable, Sendable {
+    struct ProviderAuth: Decodable, Sendable {
+        let key: String?
     }
 
-    let providerID: String?
-    let model: Model?
-    let cost: Double?
+    let opencodeGo: ProviderAuth?
 
-    /// Whether this message was served through the OpenCode Go plan.
-    var isOpenCodeGo: Bool {
-        providerID == "opencode-go" || model?.providerID == "opencode-go"
+    enum CodingKeys: String, CodingKey {
+        case opencodeGo = "opencode-go"
     }
 }
 
 enum OpenCodeGoUsageError: Error, Sendable {
-    case databaseUnavailable
-    case missingMessageTable
+    case missingCredential
 }
 
 // MARK: - Provider
 
-/// Reads OpenCode Go plan usage from the local opencode SQLite database
-/// (`~/.local/share/opencode/opencode.db`, table `message`).
-///
-/// Each message row stores `time_created` (epoch milliseconds) and a JSON
-/// payload in `data` that includes `providerID` and `cost` (USD). Only
-/// messages served through the `opencode-go` provider are counted, summed
-/// across the three plan windows (5h / weekly / monthly). Limits default to
-/// the published Go plan values ($12 / $30 / $60) and are configurable in
-/// Settings.
+/// Reads OpenCode Go plan usage from the official usage endpoint
+/// (https://opencode.ai/zen/go/v1/usage), authenticated with the plan API key
+/// from `~/.local/share/opencode/auth.json`. The server reports the three plan
+/// windows — rolling (5h), weekly and monthly — as percentages plus seconds
+/// until reset, matching the OpenCode Go dashboard.
 final class OpenCodeGoUsageProvider: UsageProviderProtocol, @unchecked Sendable {
     let serviceType: ServiceType = .opencode
 
-    private let databaseURL: URL
-    private let fiveHourDollarLimit: Double
-    private let weeklyDollarLimit: Double
-    private let monthlyDollarLimit: Double
+    static let usageURL = URL(string: "https://opencode.ai/zen/go/v1/usage")!
+
+    private let apiClient: APIClient
+    private let credentialProvider: @Sendable () -> String?
+    private let credentialLock = NSLock()
+    nonisolated(unsafe) private var cachedCredential: String??
+
+    /// Minimum cache TTL to avoid excessive API requests.
+    static let minCacheTTL: TimeInterval = 60
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedResponse: UsageData?
+    nonisolated(unsafe) private static var cachedAt: Date?
 
     init(
-        databaseURL: URL? = nil,
-        fiveHourDollarLimit: Double = 12,
-        weeklyDollarLimit: Double = 30,
-        monthlyDollarLimit: Double = 60
+        apiClient: APIClient = APIClient(),
+        credentialProvider: (@Sendable () -> String?)? = nil
     ) {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        self.databaseURL = databaseURL
-            ?? home.appendingPathComponent(".local/share/opencode/opencode.db")
-        self.fiveHourDollarLimit = fiveHourDollarLimit
-        self.weeklyDollarLimit = weeklyDollarLimit
-        self.monthlyDollarLimit = monthlyDollarLimit
+        self.apiClient = apiClient
+        self.credentialProvider = credentialProvider ?? {
+            Self.loadAPIKeyFromAuthFile()
+        }
+        self.cachedCredential = nil
     }
 
     func isConfigured() async -> Bool {
-        FileManager.default.fileExists(atPath: databaseURL.path)
+        resolveCredential() != nil
+    }
+
+    /// Returns cached response if within minimum TTL, nil otherwise.
+    static func cachedIfFresh(now: Date = Date()) -> UsageData? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        guard let cached = cachedResponse,
+              let cachedTime = cachedAt,
+              now.timeIntervalSince(cachedTime) < minCacheTTL else {
+            return nil
+        }
+        return cached
+    }
+
+    /// Stores a response in the cache.
+    static func updateCache(_ data: UsageData, now: Date = Date()) {
+        cacheLock.lock()
+        cachedResponse = data
+        cachedAt = now
+        cacheLock.unlock()
     }
 
     func fetchUsage() async throws -> UsageData {
-        let now = Date()
-        let totals = try sumCostFromDatabase(now: now)
+        if let cached = Self.cachedIfFresh() {
+            return cached
+        }
 
-        return UsageData(
+        guard let apiKey = resolveCredential() else {
+            throw OpenCodeGoUsageError.missingCredential
+        }
+
+        let now = Date()
+
+        let response: OpenCodeGoUsageResponse = try await apiClient.get(
+            url: Self.usageURL,
+            headers: [
+                "Authorization": "Bearer \(apiKey)",
+                "Accept": "application/json"
+            ]
+        )
+
+        let result = UsageData(
             service: .opencode,
-            fiveHourUsage: UsageMetric(
-                used: totals.fiveHour,
-                total: fiveHourDollarLimit,
-                unit: .dollars,
-                resetTime: nil
+            fiveHourUsage: metric(
+                from: response.rollingUsage,
+                resetInSec: response.rollingUsage?.resetInSec,
+                now: now
             ),
-            weeklyUsage: UsageMetric(
-                used: totals.weekly,
-                total: weeklyDollarLimit,
-                unit: .dollars,
-                resetTime: nil
+            weeklyUsage: metric(
+                from: response.weeklyUsage,
+                resetInSec: response.weeklyUsage?.resetInSec,
+                now: now
             ),
-            monthlyUsage: UsageMetric(
-                used: totals.monthly,
-                total: monthlyDollarLimit,
-                unit: .dollars,
-                resetTime: nil
+            monthlyUsage: metric(
+                from: response.monthlyUsage,
+                resetInSec: response.monthlyUsage?.resetInSec,
+                now: now
             ),
             lastUpdated: now,
             isAvailable: true,
             planName: "Go"
         )
+
+        Self.updateCache(result, now: now)
+        return result
     }
 
-    // MARK: - Database Reading
+    // MARK: - Helpers
 
-    private func sumCostFromDatabase(now: Date) throws -> (fiveHour: Double, weekly: Double, monthly: Double) {
-        guard FileManager.default.fileExists(atPath: databaseURL.path) else {
-            throw OpenCodeGoUsageError.databaseUnavailable
+    /// Builds a percent-based metric: `used` is the server's usage percentage
+    /// against a total of 100, with the reset time derived from `resetInSec`.
+    private func metric(
+        from window: OpenCodeGoUsageWindow?,
+        resetInSec: Int?,
+        now: Date
+    ) -> UsageMetric {
+        let resetTime = resetInSec.flatMap { sec -> Date? in
+            sec >= 0 ? now.addingTimeInterval(TimeInterval(sec)) : nil
+        }
+        return UsageMetric(
+            used: window?.usagePercent ?? 0,
+            total: 100,
+            unit: .percent,
+            resetTime: resetTime
+        )
+    }
+
+    // MARK: - Credentials
+
+    private func resolveCredential() -> String? {
+        credentialLock.lock()
+        if let cachedCredential {
+            credentialLock.unlock()
+            return cachedCredential
         }
 
-        var handle: OpaquePointer?
-        let openFlags = SQLITE_OPEN_READONLY
-        guard sqlite3_open_v2(databaseURL.path, &handle, openFlags, nil) == SQLITE_OK,
-              let handle else {
-            sqlite3_close(handle)
-            throw OpenCodeGoUsageError.databaseUnavailable
+        let loadedCredential = credentialProvider()
+        cachedCredential = loadedCredential
+        credentialLock.unlock()
+        return loadedCredential
+    }
+
+    /// Reads the plan API key from the opencode auth file:
+    /// `~/.local/share/opencode/auth.json` → `opencode-go.key`.
+    static func loadAPIKeyFromAuthFile(
+        authFileURL: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> String? {
+        let home = fileManager.homeDirectoryForCurrentUser
+        let url = authFileURL ?? home.appendingPathComponent(".local/share/opencode/auth.json")
+        guard let data = try? Data(contentsOf: url),
+              let auth = try? JSONDecoder().decode(OpenCodeAuthFile.self, from: data) else {
+            return nil
         }
-        defer { sqlite3_close(handle) }
-
-        // One query for the 30d window; the 5h / 7d splits happen in Swift.
-        let monthlyCutoffMillis = Int64(DateUtils.monthlyWindowStart(relativeTo: now)
-            .timeIntervalSince1970 * 1000)
-
-        let query = """
-            SELECT time_created, data FROM message WHERE time_created >= ?
-            """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(handle, query, -1, &statement, nil) == SQLITE_OK,
-              let statement else {
-            sqlite3_finalize(statement)
-            throw OpenCodeGoUsageError.missingMessageTable
-        }
-        defer { sqlite3_finalize(statement) }
-
-        guard sqlite3_bind_int64(statement, 1, monthlyCutoffMillis) == SQLITE_OK else {
-            throw OpenCodeGoUsageError.databaseUnavailable
-        }
-
-        let fiveHourCutoff = DateUtils.fiveHourWindowStart(relativeTo: now)
-        let weeklyCutoff = DateUtils.weeklyWindowStart(relativeTo: now)
-        let decoder = JSONDecoder()
-        var fiveHourTotal: Double = 0
-        var weeklyTotal: Double = 0
-        var monthlyTotal: Double = 0
-
-        while sqlite3_step(statement) == SQLITE_ROW {
-            let createdMillis = sqlite3_column_int64(statement, 0)
-            guard createdMillis > 0 else { continue }
-
-            guard let dataPointer = sqlite3_column_text(statement, 1) else { continue }
-            let jsonString = String(cString: dataPointer)
-            guard let jsonData = jsonString.data(using: .utf8),
-                  let record = try? decoder.decode(OpenCodeGoMessageRecord.self, from: jsonData),
-                  record.isOpenCodeGo,
-                  let cost = record.cost, cost > 0 else { continue }
-
-            let messageDate = Date(timeIntervalSince1970: TimeInterval(createdMillis) / 1000)
-            if messageDate >= fiveHourCutoff {
-                fiveHourTotal += cost
-            }
-            if messageDate >= weeklyCutoff {
-                weeklyTotal += cost
-            }
-            monthlyTotal += cost
-        }
-
-        return (fiveHourTotal, weeklyTotal, monthlyTotal)
+        return auth.opencodeGo?.key
     }
 }

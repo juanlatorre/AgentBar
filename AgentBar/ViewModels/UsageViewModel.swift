@@ -167,12 +167,7 @@ final class UsageViewModel: ObservableObject {
         }
 
         if isEnabled("opencodeGoEnabled", in: defaults) {
-            let opencodeGoLimits = opencodeGoLimits(in: defaults)
-            providers.append(OpenCodeGoUsageProvider(
-                fiveHourDollarLimit: opencodeGoLimits.fiveHour,
-                weeklyDollarLimit: opencodeGoLimits.weekly,
-                monthlyDollarLimit: opencodeGoLimits.monthly
-            ))
+            providers.append(OpenCodeGoUsageProvider())
         }
 
         if isEnabled("zaiEnabled", in: defaults) {
@@ -207,14 +202,6 @@ final class UsageViewModel: ObservableObject {
             return defaults.double(forKey: "cursorMonthlyLimit").nonZero ?? CursorPlan.pro.monthlyRequestEstimate
         }
         return plan.monthlyRequestEstimate
-    }
-
-    private static func opencodeGoLimits(in defaults: UserDefaults) -> (fiveHour: Double, weekly: Double, monthly: Double) {
-        (
-            defaults.double(forKey: "opencodeGoFiveHourLimit").nonZero ?? 12,
-            defaults.double(forKey: "opencodeGoWeeklyLimit").nonZero ?? 30,
-            defaults.double(forKey: "opencodeGoMonthlyLimit").nonZero ?? 60
-        )
     }
 }
 

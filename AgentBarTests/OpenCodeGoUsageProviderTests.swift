@@ -1,260 +1,217 @@
 import XCTest
-import SQLite3
 @testable import AgentBar
 
 final class OpenCodeGoUsageProviderTests: XCTestCase {
 
-    private var tempDirectory: URL!
-
-    override func setUpWithError() throws {
-        tempDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("OpenCodeGoUsageProviderTests-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(
-            at: tempDirectory,
-            withIntermediateDirectories: true
-        )
+    override func setUp() {
+        super.setUp()
+        OpenCodeGoMockURLProtocol.reset()
+        OpenCodeGoUsageProvider.updateCache(OpenCodeGoUsageProviderTests.staleCachedData(), now: .distantPast)
     }
 
-    override func tearDownWithError() throws {
-        if let tempDirectory {
-            try? FileManager.default.removeItem(at: tempDirectory)
-        }
+    override func tearDown() {
+        OpenCodeGoMockURLProtocol.reset()
+        super.tearDown()
     }
 
-    func testIsConfiguredFalseWhenDatabaseMissing() async {
-        let provider = OpenCodeGoUsageProvider(databaseURL: tempDirectory.appendingPathComponent("missing.db"))
-
-        let configured = await provider.isConfigured()
-
-        XCTAssertFalse(configured)
-    }
-
-    func testFetchUsageThrowsWhenDatabaseMissing() async {
-        let provider = OpenCodeGoUsageProvider(databaseURL: tempDirectory.appendingPathComponent("missing.db"))
-
-        do {
-            _ = try await provider.fetchUsage()
-            XCTFail("Expected fetchUsage to throw when the database file is missing.")
-        } catch {
-            XCTAssertEqual(error as? OpenCodeGoUsageError, .databaseUnavailable)
-        }
-    }
-
-    func testFetchUsageThrowsWhenMessageTableMissing() async throws {
-        let dbURL = tempDirectory.appendingPathComponent("empty.db")
-        try createDatabase(at: dbURL, createMessageTable: false)
-
-        let provider = OpenCodeGoUsageProvider(databaseURL: dbURL)
-
-        do {
-            _ = try await provider.fetchUsage()
-            XCTFail("Expected fetchUsage to throw when the message table is missing.")
-        } catch {
-            XCTAssertEqual(error as? OpenCodeGoUsageError, .missingMessageTable)
-        }
-    }
-
-    func testFetchUsageSumsCostWithinWindows() async throws {
-        let dbURL = tempDirectory.appendingPathComponent("usage.db")
-        try createDatabase(at: dbURL, createMessageTable: true)
-
-        let now = Date()
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-1 * 3600),   // inside 5h and 7d
-            providerID: "opencode-go",
-            cost: 1.50
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-4 * 3600),   // inside 5h and 7d
-            providerID: "opencode-go",
-            cost: 2.25
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-6 * 3600),   // only inside 7d
-            providerID: "opencode-go",
-            cost: 4.00
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-8 * 24 * 3600), // inside monthly, outside weekly/5h
-            providerID: "opencode-go",
-            cost: 6.00
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-35 * 24 * 3600), // outside all windows
-            providerID: "opencode-go",
-            cost: 8.00
-        )
-        // Messages from other providers must never count toward the Go plan.
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-2 * 3600),
-            providerID: "zai-coding-plan",
-            cost: 99.00
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-2 * 3600),
-            providerID: "opencode",
-            cost: 99.00
-        )
+    func testFetchUsageParsesRollingWeeklyMonthlyPercentages() async throws {
+        let json = """
+        {"useBalance":false,
+         "rollingUsage":{"status":"ok","resetInSec":13561,"usagePercent":0},
+         "weeklyUsage":{"status":"ok","resetInSec":441666,"usagePercent":69},
+         "monthlyUsage":{"status":"ok","resetInSec":2068758,"usagePercent":49}}
+        """
+        OpenCodeGoMockURLProtocol.stubResponse(data: Data(json.utf8), statusCode: 200)
 
         let provider = OpenCodeGoUsageProvider(
-            databaseURL: dbURL,
-            fiveHourDollarLimit: 12,
-            weeklyDollarLimit: 30,
-            monthlyDollarLimit: 60
+            apiClient: APIClient(session: OpenCodeGoMockURLProtocol.session()),
+            credentialProvider: { "sk-test-key" }
         )
 
         let usage = try await provider.fetchUsage()
 
         XCTAssertEqual(usage.service, .opencode)
         XCTAssertEqual(usage.planName, "Go")
-        XCTAssertEqual(usage.fiveHourUsage.unit, .dollars)
+        XCTAssertEqual(usage.fiveHourUsage.unit, .percent)
+        XCTAssertEqual(usage.fiveHourUsage.used, 0, accuracy: 0.001)
+        XCTAssertEqual(usage.fiveHourUsage.total, 100)
+        XCTAssertEqual(usage.fiveHourUsage.remainingPercentage, 1.0, accuracy: 0.001)
         XCTAssertEqual(
-            usage.fiveHourUsage.used,
-            3.75,
-            accuracy: 0.001,
-            "Expected 5h window to include only the two newest opencode-go messages."
+            usage.fiveHourUsage.resetTime?.timeIntervalSinceNow ?? 0,
+            13561,
+            accuracy: 5
         )
-        XCTAssertEqual(usage.fiveHourUsage.total, 12)
-        XCTAssertEqual(usage.fiveHourUsage.remaining, 8.25, accuracy: 0.001)
-        XCTAssertEqual(usage.fiveHourUsage.remainingPercentage, 0.6875, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.used ?? 0, 69, accuracy: 0.001)
+        XCTAssertEqual(usage.weeklyUsage?.remainingPercentage ?? 0, 0.31, accuracy: 0.001)
         XCTAssertEqual(
-            usage.weeklyUsage?.used ?? 0,
-            7.75,
-            accuracy: 0.001,
-            "Expected 7d window to include the three recent opencode-go messages."
+            usage.weeklyUsage?.resetTime?.timeIntervalSinceNow ?? 0,
+            441666,
+            accuracy: 5
         )
-        XCTAssertEqual(usage.weeklyUsage?.total, 30)
-        XCTAssertEqual(usage.weeklyUsage?.remaining ?? 0, 22.25, accuracy: 0.001)
+        XCTAssertEqual(usage.monthlyUsage?.used ?? 0, 49, accuracy: 0.001)
+        XCTAssertEqual(usage.monthlyUsage?.remainingPercentage ?? 0, 0.51, accuracy: 0.001)
         XCTAssertEqual(
-            usage.monthlyUsage?.used ?? 0,
-            13.75,
-            accuracy: 0.001,
-            "Expected 30d window to include the four recent opencode-go messages."
+            usage.monthlyUsage?.resetTime?.timeIntervalSinceNow ?? 0,
+            2068758,
+            accuracy: 5
         )
-        XCTAssertEqual(usage.monthlyUsage?.total, 60)
-        XCTAssertEqual(usage.monthlyUsage?.remaining ?? 0, 46.25, accuracy: 0.001)
+        XCTAssertEqual(OpenCodeGoMockURLProtocol.authorizations, ["Bearer sk-test-key"])
     }
 
-    func testFetchUsageIgnoresMessagesWithoutCost() async throws {
-        let dbURL = tempDirectory.appendingPathComponent("partial.db")
-        try createDatabase(at: dbURL, createMessageTable: true)
-
-        let now = Date()
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-1 * 3600),
-            dataJSON: #"{"role":"user","providerID":"opencode-go","cost":0}"#
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-2 * 3600),
-            dataJSON: #"{"role":"assistant","providerID":"opencode-go","cost":0.75}"#
-        )
-        try insertMessage(
-            into: dbURL,
-            timeCreated: now.addingTimeInterval(-3 * 3600),
-            dataJSON: #"{"role":"assistant","providerID":"opencode-go"}"#
-        )
+    func testFetchUsageDefaultsToZeroWhenWindowsMissing() async throws {
+        let json = #"{"useBalance":false}"#
+        OpenCodeGoMockURLProtocol.stubResponse(data: Data(json.utf8), statusCode: 200)
 
         let provider = OpenCodeGoUsageProvider(
-            databaseURL: dbURL,
-            fiveHourDollarLimit: 12,
-            weeklyDollarLimit: 30
+            apiClient: APIClient(session: OpenCodeGoMockURLProtocol.session()),
+            credentialProvider: { "sk-test-key" }
         )
 
         let usage = try await provider.fetchUsage()
 
-        XCTAssertEqual(usage.fiveHourUsage.used, 0.75, accuracy: 0.001)
-        XCTAssertEqual(usage.weeklyUsage?.used ?? 0, 0.75, accuracy: 0.001)
+        XCTAssertEqual(usage.fiveHourUsage.used, 0)
+        XCTAssertEqual(usage.weeklyUsage?.used, 0)
+        XCTAssertEqual(usage.monthlyUsage?.used, 0)
+        XCTAssertNil(usage.fiveHourUsage.resetTime)
     }
 
-    // MARK: - Test Database Helpers
+    func testFetchUsageThrowsWhenAPIKeyMissing() async {
+        let provider = OpenCodeGoUsageProvider(
+            apiClient: APIClient(session: OpenCodeGoMockURLProtocol.session()),
+            credentialProvider: { nil }
+        )
 
-    private func createDatabase(at url: URL, createMessageTable: Bool) throws {
-        var handle: OpaquePointer?
-        guard sqlite3_open(url.path, &handle) == SQLITE_OK, let handle else {
-            sqlite3_close(handle)
-            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 1)
+        do {
+            _ = try await provider.fetchUsage()
+            XCTFail("Expected fetchUsage to throw when the API key is missing.")
+        } catch {
+            XCTAssertEqual(error as? OpenCodeGoUsageError, .missingCredential)
         }
-        defer { sqlite3_close(handle) }
-
-        if createMessageTable {
-            let createSQL = """
-                CREATE TABLE message (
-                    id TEXT PRIMARY KEY,
-                    session_id TEXT NOT NULL,
-                    time_created INTEGER NOT NULL,
-                    time_updated INTEGER NOT NULL,
-                    data TEXT NOT NULL
-                )
-                """
-            var statement: OpaquePointer?
-            guard sqlite3_prepare_v2(handle, createSQL, -1, &statement, nil) == SQLITE_OK else {
-                sqlite3_finalize(statement)
-                throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 2)
-            }
-            defer { sqlite3_finalize(statement) }
-            guard sqlite3_step(statement) == SQLITE_DONE else {
-                throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 3)
-            }
-        }
+        XCTAssertEqual(OpenCodeGoMockURLProtocol.requestCount, 0)
     }
 
-    private func insertMessage(
-        into url: URL,
-        timeCreated: Date,
-        providerID: String,
-        cost: Double
-    ) throws {
-        let json = #"{"role":"assistant","providerID":"\#(providerID)","cost":\#(cost)}"#
-        try insertMessage(into: url, timeCreated: timeCreated, dataJSON: json)
+    func testFetchUsageUsesCacheWithinTTL() async throws {
+        let fresh = UsageData(
+            service: .opencode,
+            fiveHourUsage: UsageMetric(used: 10, total: 100, unit: .percent, resetTime: nil),
+            weeklyUsage: nil,
+            monthlyUsage: nil,
+            lastUpdated: Date(),
+            isAvailable: true,
+            planName: "Go"
+        )
+        OpenCodeGoUsageProvider.updateCache(fresh, now: Date())
+
+        let provider = OpenCodeGoUsageProvider(
+            apiClient: APIClient(session: OpenCodeGoMockURLProtocol.session()),
+            credentialProvider: { "sk-test-key" }
+        )
+
+        let usage = try await provider.fetchUsage()
+
+        XCTAssertEqual(usage.fiveHourUsage.used, 10)
+        XCTAssertEqual(OpenCodeGoMockURLProtocol.requestCount, 0, "Expected no network call when cache is fresh.")
     }
 
-    private func insertMessage(
-        into url: URL,
-        timeCreated: Date,
-        dataJSON: String
-    ) throws {
-        var handle: OpaquePointer?
-        guard sqlite3_open(url.path, &handle) == SQLITE_OK, let handle else {
-            sqlite3_close(handle)
-            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 10)
-        }
-        defer { sqlite3_close(handle) }
+    func testIsConfiguredReflectsCredentialProvider() async {
+        let configured = OpenCodeGoUsageProvider(credentialProvider: { "sk-test-key" })
+        let notConfigured = OpenCodeGoUsageProvider(credentialProvider: { nil })
 
-        let insertSQL = """
-            INSERT INTO message (id, session_id, time_created, time_updated, data)
-            VALUES (?, ?, ?, ?, ?)
-            """
-        var statement: OpaquePointer?
-        guard sqlite3_prepare_v2(handle, insertSQL, -1, &statement, nil) == SQLITE_OK else {
-            sqlite3_finalize(statement)
-            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 11)
-        }
-        defer { sqlite3_finalize(statement) }
+        let a = await configured.isConfigured()
+        let b = await notConfigured.isConfigured()
 
-        let id = "msg_\(UUID().uuidString)" as NSString
-        let sessionID = "ses_\(UUID().uuidString)" as NSString
-        let json = dataJSON as NSString
-        let createdMillis = Int64(timeCreated.timeIntervalSince1970 * 1000)
-        let updatedMillis = createdMillis
-        let transientDestructor = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-
-        sqlite3_bind_text(statement, 1, id.utf8String, -1, transientDestructor)
-        sqlite3_bind_text(statement, 2, sessionID.utf8String, -1, transientDestructor)
-        sqlite3_bind_int64(statement, 3, createdMillis)
-        sqlite3_bind_int64(statement, 4, updatedMillis)
-        sqlite3_bind_text(statement, 5, json.utf8String, -1, transientDestructor)
-
-        guard sqlite3_step(statement) == SQLITE_DONE else {
-            throw NSError(domain: "OpenCodeGoUsageProviderTests", code: 12)
-        }
+        XCTAssertTrue(a)
+        XCTAssertFalse(b)
     }
+
+    func testLoadAPIKeyFromAuthFile() throws {
+        let authFile = """
+        {"zai-coding-plan":{"type":"api","key":"other-key"},
+         "opencode-go":{"type":"api","key":"sk-opencode-go-key"}}
+        """
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("auth-\(UUID().uuidString).json")
+        try Data(authFile.utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertEqual(OpenCodeGoUsageProvider.loadAPIKeyFromAuthFile(authFileURL: url), "sk-opencode-go-key")
+    }
+
+    func testLoadAPIKeyFromAuthFileReturnsNilWhenKeyMissing() throws {
+        let authFile = #"{"other":{"type":"api","key":"x"}}"#
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("auth-\(UUID().uuidString).json")
+        try Data(authFile.utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertNil(OpenCodeGoUsageProvider.loadAPIKeyFromAuthFile(authFileURL: url))
+    }
+
+    /// Ensures a previous cached response never leaks across tests.
+    private static func staleCachedData() -> UsageData {
+        UsageData(
+            service: .opencode,
+            fiveHourUsage: UsageMetric(used: 99, total: 100, unit: .percent, resetTime: .distantPast),
+            weeklyUsage: nil,
+            monthlyUsage: nil,
+            lastUpdated: .distantPast,
+            isAvailable: true
+        )
+    }
+}
+
+// MARK: - Mock URL Protocol
+
+private final class OpenCodeGoMockURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var requestCount = 0
+    nonisolated(unsafe) private static var responseData: Data?
+    nonisolated(unsafe) private static var statusCode = 200
+    nonisolated(unsafe) private static var lastAuthorization: String?
+
+    static func reset() {
+        requestCount = 0
+        responseData = nil
+        statusCode = 200
+        lastAuthorization = nil
+    }
+
+    static func stubResponse(data: Data, statusCode: Int) {
+        responseData = data
+        self.statusCode = statusCode
+    }
+
+    static var authorizations: [String] {
+        lastAuthorization.map { [$0] } ?? []
+    }
+
+    static func session() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [OpenCodeGoMockURLProtocol.self]
+        return URLSession(configuration: config)
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.requestCount += 1
+        Self.lastAuthorization = request.value(forHTTPHeaderField: "Authorization")
+
+        if let data = Self.responseData {
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: Self.statusCode,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+        } else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }
