@@ -2,6 +2,10 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 103: Center single-percentage blocks in the menu bar
+- **Fix**: Codex (one percentage) no longer renders an empty second line that pushed its value to the top — the weekly Text is conditional, and the outer HStack uses `.center` alignment so single-line blocks sit vertically centered between Claude/OpenCode's two-line stacks.
+- All 284 tests passing
+
 ## Iteration 102: Fix truncated menu bar percentages
 - **Root cause**: the three pinned blocks need ~146pt but the status item was 140pt; after dropping the block's `.fixedSize()` in the centering change, SwiftUI compressed the percentage texts, rendering them as "10…".
 - **Fix**: restored `.fixedSize()` on each `ServiceUsageStack` (blocks never compress) and widened the status item to 150pt. Verified the item now measures 152×24 with full text.

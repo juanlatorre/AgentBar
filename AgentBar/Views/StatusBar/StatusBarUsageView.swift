@@ -32,7 +32,7 @@ struct StatusBarUsageView: View {
             }
             .frame(width: 24, height: 20)
         } else {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
                 ForEach(displayed) { usage in
                     ServiceUsageStack(usage: usage)
                 }
@@ -66,9 +66,11 @@ private struct ServiceUsageStack: View {
                 Text(fiveHourPercent)
                     .font(.system(size: 8.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                Text(weeklyPercent)
-                    .font(.system(size: 8.5, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                if usage.weeklyUsage != nil {
+                    Text(weeklyPercent)
+                        .font(.system(size: 8.5, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                }
             }
         }
         .fixedSize()
