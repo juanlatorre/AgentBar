@@ -2,6 +2,12 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 99: Menu bar pins Claude / Codex / OpenCode with stacked percentages
+- **Three services at once**: `StatusBarUsageView` now pins Claude, Codex and OpenCode side by side (no more cycling) — each block shows the brand-colored short name plus remaining percentages. Claude and OpenCode stack two lines (5h on top, weekly below); Codex shows its single weekly percentage, with an empty second line to keep columns aligned.
+- **Planner removed**: `StatusBarDisplayPlanner` (ranking/scroll layout) is gone; the menu bar no longer needs it. `ServiceTypeColorTests` moved to its own file; ranking tests deleted.
+- **Status item width**: switched from fixed 90pt to `NSStatusItem.variableLength` so the item hugs the new content.
+- All 284 tests passing
+
 ## Iteration 98: Menu bar shows icon + percentage (OpenUsage style)
 - **Status bar redesign**: Replaced the stacked bars (`StackedBarView`/`SingleBarView`) with `StatusBarUsageView` — the service's short-name icon in its brand color plus the remaining percentage (e.g. "CX 96%"), like OpenUsage's text strip. The cycle still shows the most critical service first (8s), then rotates through all services every 3s; hovering jumps back to the top and pauses.
 - **Planner simplified**: `StatusBarDisplayPlanner` no longer needs row layout (rowHeight/spacing/viewport/visibleRowCount removed); `maxScrollIndex` now walks every service (count−1) and a new `criticalRemainingPercentage(for:)` (min across 5h/week/month windows) drives both ranking and the shown percentage. `StatusBarController` uses the renamed view; the 90pt status item already fits the text.
