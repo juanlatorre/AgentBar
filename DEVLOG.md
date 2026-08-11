@@ -2,6 +2,10 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 107: Label the stacked menu bar percentages (5h / 7d)
+- **Clarity fix**: the menu bar already stacked the shortest window on top (5h/rolling) and the weekly below, but without labels the values were ambiguous (with remaining, the top 100% looked like the weekly). Each percentage line now carries a tiny `5h` / `7d` label (from `ServiceType.fiveHourLabel` / `weeklyLabel`, so Codex's single line correctly reads `7d`), and the status item widened to 184pt to fit.
+- All 287 tests passing
+
 ## Iteration 106: Back to remaining allowance everywhere
 - **User preference**: after trying used percentages, the user prefers remaining — restored `UsageMetric.remaining`/`remainingPercentage` and switched the menu bar, metric rows, mini bars and ranking back to remaining (red below 20% remaining, most-critical-first ordering). Tests assert remaining percentages again.
 - All 287 tests passing
