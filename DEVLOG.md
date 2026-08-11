@@ -2,6 +2,11 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 95: Brand-aligned service colors
+- **Codex now blue**: `ServiceType.codex` switched from gray-400 to blue-700 (dark) / blue-400 (light) to match ChatGPT/OpenAI branding, keeping it visually distinct from Gemini and Copilot (both blue-600) so the pairwise color test still passes.
+- **OpenCode now yellow**: `ServiceType.opencode` switched from cyan-600 to yellow-500 (dark) / yellow-200 (light), matching opencode's branding; Claude stays amber (already orange). Updated `testCodexDarkColorIsGray400` → `testCodexDarkColorIsBlue700`.
+- All 289 tests passing
+
 ## Iteration 94: OpenCode Go plan usage in dollars, fix history refresh race
 - **OpenCode Go plan provider**: `OpenCodeUsageProvider` (token-based, Iteration 93) was replaced by `OpenCodeGoUsageProvider`. "OpenCode Go" is the $10/month subscription (opencode.ai/docs/go) with usage limits denominated in dollars: $12/5h, $30/week, $60/month. The provider reads local messages from `~/.local/share/opencode/opencode.db` (table `message`, JSON `data` with `providerID`/`cost` in USD), counts only messages served through `opencode-go` (also checking `model.providerID`), and sums `cost` across the 5h/7d sliding windows. Limits are configurable in Settings (`opencodeGoEnabled`, `opencodeGoFiveHourLimit` $12, `opencodeGoWeeklyLimit` $30); the row shows plan name "Go" with `.dollars` formatting ($x.xx). Fact-checked against opencode.ai/docs/go and the actual database schema/values.
 - **History refresh race fix**: `UsageHistoryViewModel.refresh()` awaited its own generation directly, so a concurrent `scheduleRefresh()` (triggered by a global `.usageHistoryChanged` notification from another test/refresh) could invalidate it mid-await and leave `servicePanels` empty — an intermittent failure under parallel test execution (`testPanelsAreSortedByUsageFrequencyDescending`). `refresh()` now runs through `refreshTask` and awaits the latest task in the chain (`refreshTaskGeneration`), so callers always observe a fully populated state.

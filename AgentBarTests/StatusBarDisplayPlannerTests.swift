@@ -3,13 +3,13 @@ import SwiftUI
 @testable import AgentBar
 
 final class ServiceTypeColorTests: XCTestCase {
-    func testCodexDarkColorIsGray400() {
+    func testCodexDarkColorIsBlue700() {
         let color = ServiceType.codex.darkColor
-        // gray-400: (0.60, 0.63, 0.67)
+        // blue-700: (0.004, 0.231, 0.741)
         let resolved = NSColor(color).usingColorSpace(.sRGB)!
-        XCTAssertEqual(resolved.redComponent, 0.60, accuracy: 0.01)
-        XCTAssertEqual(resolved.greenComponent, 0.63, accuracy: 0.01)
-        XCTAssertEqual(resolved.blueComponent, 0.67, accuracy: 0.01)
+        XCTAssertEqual(resolved.redComponent, 0.004, accuracy: 0.01)
+        XCTAssertEqual(resolved.greenComponent, 0.231, accuracy: 0.01)
+        XCTAssertEqual(resolved.blueComponent, 0.741, accuracy: 0.01)
     }
 
     func testAllServicesHaveDistinctDarkColors() {
