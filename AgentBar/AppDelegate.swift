@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AgentNotifySettingsMigrator.migrateIfNeeded()
         notifyMonitor.start()
         registerLoginItemIfNeeded()
+        syncLoginItemState()
     }
 
     /// Terminate this instance if another copy is already running.
@@ -41,6 +42,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard defaults.object(forKey: key) == nil else { return }
         defaults.set(true, forKey: key)
         try? LoginItemManager.setEnabled(true)
+    }
+
+    /// Keep the actual login-item registration in sync with the stored preference.
+    /// Covers cases where registration failed on an earlier launch (e.g. the app
+    /// was running from a build directory instead of /Applications).
+    private func syncLoginItemState() {
+        let defaults = UserDefaults.standard
+        let key = "launchAtLogin"
+        guard defaults.object(forKey: key) != nil else { return }
+
+        let enabled = defaults.bool(forKey: key)
+        do {
+            if enabled, !LoginItemManager.isEnabled {
+                try LoginItemManager.setEnabled(true)
+            } else if enabled, LoginItemManager.isEnabled {
+                // Re-register so the login item points at this copy of the app
+                // (e.g. after moving from a build directory to /Applications).
+                try LoginItemManager.setEnabled(false)
+                try LoginItemManager.setEnabled(true)
+            } else if !enabled, LoginItemManager.isEnabled {
+                try LoginItemManager.setEnabled(false)
+            }
+        } catch {
+            // Ignore — the next launch retries.
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
