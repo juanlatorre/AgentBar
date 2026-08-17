@@ -18,7 +18,7 @@ final class StatusBarController {
 
     func setup() {
         if statusItem == nil {
-            statusItem = NSStatusBar.system.statusItem(withLength: 184)
+            statusItem = NSStatusBar.system.statusItem(withLength: 200)
         }
 
         guard let button = statusItem?.button else {

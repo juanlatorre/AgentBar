@@ -1,15 +1,15 @@
 import SwiftUI
 
 /// Menu bar status item: shows pinned services at once (Claude, Codex,
-/// OpenCode, Command Code) as icon + remaining percentage. Services with a 5h
-/// and a weekly window (Claude, OpenCode, Command Code) stack both
-/// percentages; Codex shows its single weekly percentage.
+/// OpenCode) as icon + remaining percentage. Services with a 5h and a weekly
+/// window (Claude, OpenCode) stack both percentages; Codex shows its single
+/// weekly percentage.
 struct StatusBarUsageView: View {
     let services: [UsageData]
     var hasError: Bool = false
 
     /// The services pinned in the menu bar, in display order.
-    private static let pinnedServices: [ServiceType] = [.claude, .codex, .opencode, .cmd]
+    private static let pinnedServices: [ServiceType] = [.claude, .codex, .opencode]
 
     private var displayed: [UsageData] {
         Self.pinnedServices.compactMap { pinned in
@@ -38,7 +38,7 @@ struct StatusBarUsageView: View {
                 }
             }
             .padding(.horizontal, 2)
-            .frame(maxWidth: .infinity)
+            .fixedSize()
         }
     }
 }
