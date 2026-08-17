@@ -41,6 +41,7 @@
 		5E1867FA81EF3E65F2004173 /* UserDefaultsExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90DC40343CBC437D0FBF6768 /* UserDefaultsExtensions.swift */; };
 		64B5EE740E6DCE46F51DBB82 /* SubscriptionPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = B008B90F341B23AF377ED19C /* SubscriptionPlan.swift */; };
 		689846430EF4632E4FE80031 /* ZaiUsageProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3018DAE2F5608489E6507B68 /* ZaiUsageProviderTests.swift */; };
+		6F6078BC1FAD046CD8CD3624 /* CommandCodeUsageProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D71B19F593B884594BC0869 /* CommandCodeUsageProviderTests.swift */; };
 		72EFC2C9B083C843C51DACCF /* CESPPackDownloadServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A9C106D44822F4072ED37B /* CESPPackDownloadServiceTests.swift */; };
 		74953B4BC38D06F286972F8A /* UsageHistoryViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B5358DCB78A72A34C806A41 /* UsageHistoryViewModelTests.swift */; };
 		74ADD6D9AD6211A5EADD0FFD /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 013580EE51E83A75B14C85C6 /* StatusBarController.swift */; };
@@ -49,6 +50,7 @@
 		7820704EDC195F0FD78C0B5F /* AgentNotifyNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F48F25460C2DC5C7773C63D /* AgentNotifyNotificationService.swift */; };
 		78B55F10346A71DE9B455590 /* NotifySoundManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48FC8B202CA33D689860FAE5 /* NotifySoundManagerTests.swift */; };
 		78D9AF27A2BC8FCBECFBAAF4 /* OpenCodeGoUsageProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A33B951073E84FCF118E42 /* OpenCodeGoUsageProviderTests.swift */; };
+		791A12BB9B6FE8A60859EF38 /* CommandCodeUsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 358A677F18FDCA00E3F113DF /* CommandCodeUsageProvider.swift */; };
 		7B39B69704BD64A2FDC0F6FD /* CESPRegistryPack.swift in Sources */ = {isa = PBXBuildFile; fileRef = C921084A7A27191E1528CF80 /* CESPRegistryPack.swift */; };
 		82DF365B8968015DA3B498A3 /* UsageHistoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC6668398AB9DCC002A69A6 /* UsageHistoryViewModel.swift */; };
 		84C78252350FB71225C81B0C /* AgentNotifySettingsMigrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE9AEDC7AABDFEDA82EEFAFE /* AgentNotifySettingsMigrator.swift */; };
@@ -108,6 +110,7 @@
 		1C8199F37BC8BA7C8EEC2B83 /* UsageViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageViewModel.swift; sourceTree = "<group>"; };
 		20A6ABE351ED25CC0D1A595D /* CodexNotifyEventDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodexNotifyEventDetectorTests.swift; sourceTree = "<group>"; };
 		3018DAE2F5608489E6507B68 /* ZaiUsageProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZaiUsageProviderTests.swift; sourceTree = "<group>"; };
+		358A677F18FDCA00E3F113DF /* CommandCodeUsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCodeUsageProvider.swift; sourceTree = "<group>"; };
 		385332CCF14C0EA15933B029 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		3CACABC16CB1546B3A6BE16C /* NotifySoundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotifySoundManager.swift; sourceTree = "<group>"; };
 		3E13364F71D89961DEF607D2 /* AgentNotifyEventDetectorProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentNotifyEventDetectorProtocol.swift; sourceTree = "<group>"; };
@@ -128,6 +131,7 @@
 		6B5358DCB78A72A34C806A41 /* UsageHistoryViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryViewModelTests.swift; sourceTree = "<group>"; };
 		6C5EA30148527620F8F736B8 /* UsageProviderProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageProviderProtocol.swift; sourceTree = "<group>"; };
 		6C5F7A9F14F77AE444864261 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		6D71B19F593B884594BC0869 /* CommandCodeUsageProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandCodeUsageProviderTests.swift; sourceTree = "<group>"; };
 		6DD17B4966C3A7852A5425AF /* AgentBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AgentBarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6EC6668398AB9DCC002A69A6 /* UsageHistoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageHistoryViewModel.swift; sourceTree = "<group>"; };
 		6F1CF9AA7C9046F014FCC56C /* MockUsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUsageProvider.swift; sourceTree = "<group>"; };
@@ -253,6 +257,7 @@
 				5B7EEA37A7EFFF2C3A0B4A1B /* ClaudeUsageProvider.swift */,
 				AE3ED42D28F4B85660CCC365 /* CodexNotifyEventDetector.swift */,
 				DE6153FAE83E41E3CB6D7906 /* CodexUsageProvider.swift */,
+				358A677F18FDCA00E3F113DF /* CommandCodeUsageProvider.swift */,
 				9AEF729EA116BEFCD2ACFBBB /* CopilotUsageProvider.swift */,
 				C8CE2D6F4A6ABDA2B44C2DEB /* CursorUsageProvider.swift */,
 				6992AA8505D71EC3A51E135A /* GeminiUsageProvider.swift */,
@@ -384,6 +389,7 @@
 				4C6571F420208CAEE28D0D6C /* ClaudeUsageProviderTests.swift */,
 				20A6ABE351ED25CC0D1A595D /* CodexNotifyEventDetectorTests.swift */,
 				AC18E21D095D18251F7E9DBB /* CodexUsageProviderTests.swift */,
+				6D71B19F593B884594BC0869 /* CommandCodeUsageProviderTests.swift */,
 				A0A93A21D3C3B9F178B46F77 /* CopilotUsageProviderTests.swift */,
 				1AC6B625FC95A01761E9033B /* CursorUsageProviderTests.swift */,
 				04C1E41FDB05FE948BD0482C /* DateUtilsTests.swift */,
@@ -531,6 +537,7 @@
 				3EE38AF1E8FFB7BF1329041C /* ClaudeUsageProviderTests.swift in Sources */,
 				FCE5028EE8EE278731C8DA7E /* CodexNotifyEventDetectorTests.swift in Sources */,
 				F1AD3836030930D7C0009875 /* CodexUsageProviderTests.swift in Sources */,
+				6F6078BC1FAD046CD8CD3624 /* CommandCodeUsageProviderTests.swift in Sources */,
 				B8E80F1E142B0D7458A44A4E /* CopilotUsageProviderTests.swift in Sources */,
 				52F84DDD177A2422B54BF7F0 /* CursorUsageProviderTests.swift in Sources */,
 				38CE09D9014E986F75D0B8AA /* DateUtilsTests.swift in Sources */,
@@ -575,6 +582,7 @@
 				3B71B41FB07369356167BA8F /* ClaudeUsageProvider.swift in Sources */,
 				8D605A7D5A16AE0686002B22 /* CodexNotifyEventDetector.swift in Sources */,
 				0DC20BA6DAA4B12BD92BC7B1 /* CodexUsageProvider.swift in Sources */,
+				791A12BB9B6FE8A60859EF38 /* CommandCodeUsageProvider.swift in Sources */,
 				9FA537772F4F3CC5B45A746E /* CopilotUsageProvider.swift in Sources */,
 				3DC8AC0C7189CC2E326C6EB3 /* CursorUsageProvider.swift in Sources */,
 				E5AE5B034887BAECCFCD7233 /* DateUtils.swift in Sources */,

@@ -8,7 +8,7 @@ final class UsageViewModel: ObservableObject {
     @Published var isLoading: Bool = false
 
     private static let serviceOrder: [ServiceType] = [
-        .claude, .codex, .gemini, .copilot, .cursor, .opencode, .zai
+        .claude, .codex, .gemini, .copilot, .cursor, .opencode, .zai, .cmd
     ]
 
     private var providers: [any UsageProviderProtocol]
@@ -93,8 +93,8 @@ final class UsageViewModel: ObservableObject {
             }
         }
 
-        results.sort { a, b in
-            Self.sortIndex(for: a.service) < Self.sortIndex(for: b.service)
+        results.sort { lhs, rhs in
+            Self.sortIndex(for: lhs.service) < Self.sortIndex(for: rhs.service)
         }
 
         usageData = results
@@ -172,6 +172,10 @@ final class UsageViewModel: ObservableObject {
 
         if isEnabled("zaiEnabled", in: defaults) {
             providers.append(ZaiUsageProvider())
+        }
+
+        if isEnabled("cmdEnabled", in: defaults) {
+            providers.append(CommandCodeUsageProvider())
         }
 
         return providers

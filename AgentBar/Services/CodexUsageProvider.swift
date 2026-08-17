@@ -11,75 +11,227 @@ struct CodexSessionRecord: Decodable, Sendable {
 struct CodexPayload: Decodable, Sendable {
     let type: String?
     let info: CodexTokenInfo?
-    let rate_limits: CodexRateLimits?
+    let rateLimits: CodexRateLimits?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case info
+        case rateLimits = "rate_limits"
+    }
 }
 
 struct CodexTokenInfo: Decodable, Sendable {
-    let total_token_usage: CodexTokenUsage?
-    let last_token_usage: CodexTokenUsage?
+    let totalTokenUsage: CodexTokenUsage?
+    let lastTokenUsage: CodexTokenUsage?
+
+    enum CodingKeys: String, CodingKey {
+        case totalTokenUsage = "total_token_usage"
+        case lastTokenUsage = "last_token_usage"
+    }
 }
 
 struct CodexTokenUsage: Decodable, Sendable {
-    let input_tokens: Int?
-    let output_tokens: Int?
-    let cached_input_tokens: Int?
-    let reasoning_output_tokens: Int?
-    let total_tokens: Int?
+    let inputTokens: Int?
+    let outputTokens: Int?
+    let cachedInputTokens: Int?
+    let reasoningOutputTokens: Int?
+    let totalTokens: Int?
 
-    var totalTokens: Int {
-        (input_tokens ?? 0) +
-        (cached_input_tokens ?? 0) +
-        (output_tokens ?? 0) +
-        (reasoning_output_tokens ?? 0)
+    var totalTokensSum: Int {
+        (inputTokens ?? 0) +
+        (cachedInputTokens ?? 0) +
+        (outputTokens ?? 0) +
+        (reasoningOutputTokens ?? 0)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case inputTokens = "input_tokens"
+        case outputTokens = "output_tokens"
+        case cachedInputTokens = "cached_input_tokens"
+        case reasoningOutputTokens = "reasoning_output_tokens"
+        case totalTokens = "total_tokens"
     }
 }
 
 struct CodexRateLimits: Decodable, Sendable {
-    let limit_id: String?
+    let limitId: String?
     let primary: CodexRateWindow?
     let secondary: CodexRateWindow?
+
+    enum CodingKeys: String, CodingKey {
+        case limitId = "limit_id"
+        case primary
+        case secondary
+    }
 }
 
 struct CodexRateWindow: Decodable, Sendable {
-    let used_percent: Double?
-    let window_minutes: Int?
-    let resets_at: Int?
+    let usedPercent: Double?
+    let windowMinutes: Int?
+    let resetsAt: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case usedPercent = "used_percent"
+        case windowMinutes = "window_minutes"
+        case resetsAt = "resets_at"
+    }
+}
+
+// MARK: - Codex Usage API (ChatGPT backend, verified 2026-08)
+
+/// GET https://chatgpt.com/backend-api/codex/usage?limit_id=codex
+///
+/// Authenticated with the ChatGPT OAuth token from `~/.codex/auth.json`
+/// (`tokens.access_token` + `tokens.account_id`). This is the same endpoint
+/// the Codex CLI app-server polls in-process; it reports the live weekly
+/// rate-limit window. Sample response:
+///
+/// {"user_id":"user-...","account_id":"...","email":"...","plan_type":"prolite",
+///  "rate_limit":{"allowed":false,"limit_reached":true,
+///    "primary_window":{"used_percent":100,"limit_window_seconds":604800,
+///                      "reset_after_seconds":261623,"reset_at":1787196781},
+///    "secondary_window":null},
+///  "additional_rate_limits":[{"limit_name":"GPT-5.3-Codex-Spark",...}],
+///  "credits":{"has_credits":false,"balance":"0"},
+///  "spend_control":{"reached":false},
+///  "rate_limit_reached_type":{"type":"rate_limit_reached"},
+///  "rate_limit_reset_credits":{"available_count":0}}
+struct CodexUsageAPIResponse: Decodable, Sendable {
+    let planType: String?
+    let rateLimit: CodexAPIRateLimit?
+    let rateLimitResetCredits: CodexRateLimitResetCredits?
+
+    enum CodingKeys: String, CodingKey {
+        case planType = "plan_type"
+        case rateLimit = "rate_limit"
+        case rateLimitResetCredits = "rate_limit_reset_credits"
+    }
+}
+
+struct CodexAPIRateLimit: Decodable, Sendable {
+    let allowed: Bool?
+    let limitReached: Bool?
+    let primaryWindow: CodexAPIWindow?
+    let secondaryWindow: CodexAPIWindow?
+
+    enum CodingKeys: String, CodingKey {
+        case allowed
+        case limitReached = "limit_reached"
+        case primaryWindow = "primary_window"
+        case secondaryWindow = "secondary_window"
+    }
+}
+
+struct CodexAPIWindow: Decodable, Sendable {
+    let usedPercent: Double?
+    let limitWindowSeconds: Int?
+    let resetAfterSeconds: Int?
+    let resetAt: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case usedPercent = "used_percent"
+        case limitWindowSeconds = "limit_window_seconds"
+        case resetAfterSeconds = "reset_after_seconds"
+        case resetAt = "reset_at"
+    }
+}
+
+struct CodexRateLimitResetCredits: Decodable, Sendable {
+    let availableCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case availableCount = "available_count"
+    }
+}
+
+/// The Codex CLI OAuth store: `~/.codex/auth.json`.
+/// {"auth_mode":"chatgpt","tokens":{"access_token":"...","account_id":"...",...}}
+struct CodexAuthFile: Decodable, Sendable {
+    struct Tokens: Decodable, Sendable {
+        let accessToken: String?
+        let accountId: String?
+
+        enum CodingKeys: String, CodingKey {
+            case accessToken = "access_token"
+            case accountId = "account_id"
+        }
+    }
+
+    let tokens: Tokens?
+}
+
+enum CodexUsageError: Error, Sendable {
+    case missingCredential
 }
 
 // MARK: - Provider
 
-/// Reads Codex (ChatGPT) usage from local session files.
+/// Reads Codex (ChatGPT) usage from the ChatGPT usage API, falling back to
+/// local session files.
 ///
-/// The current rate-limit payload exposes a single weekly window:
-/// `rate_limits.primary` with `window_minutes: 10080` (7 days) and no
-/// secondary window — the 5-hour limit no longer exists. For sessions
-/// written before that change, the weekly window lives in `secondary`,
-/// so we pick whichever window covers 7 days.
+/// Since Codex CLI 0.147 the app-server no longer writes rollout JSONL session
+/// files (`~/.codex/sessions/**`) while running — rate limits are fetched
+/// in-process from the ChatGPT backend. The provider therefore queries
+/// `GET /backend-api/codex/usage?limit_id=codex` with the OAuth token from
+/// `~/.codex/auth.json` (the same store the CLI uses). When the API is
+/// unreachable or the token is missing, it falls back to the legacy JSONL
+/// parsing (which still works for CLI versions that write sessions), then to
+/// the UserDefaults metric cache.
 final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
     let serviceType: ServiceType = .codex
+
+    static let usageURL = URL(string: "https://chatgpt.com/backend-api/codex/usage?limit_id=codex")!
 
     private let sessionsDir: URL
     private let weeklyTokenLimit: Double
     private let defaults: UserDefaults
+    private let apiClient: APIClient
+    private let authFileURL: URL
+    private let fileManager: FileManager
+
+    /// Minimum cache TTL to avoid excessive API requests.
+    static let minCacheTTL: TimeInterval = 60
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedResponse: UsageData?
+    nonisolated(unsafe) private static var cachedAt: Date?
 
     init(
         sessionsDir: URL? = nil,
         weeklyTokenLimit: Double = 100_000_000,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        apiClient: APIClient = APIClient(),
+        authFileURL: URL? = nil,
+        fileManager: FileManager = .default
     ) {
-        let home = FileManager.default.homeDirectoryForCurrentUser
+        let home = fileManager.homeDirectoryForCurrentUser
         self.sessionsDir = sessionsDir ?? home.appendingPathComponent(".codex/sessions")
         self.weeklyTokenLimit = weeklyTokenLimit
         self.defaults = defaults
+        self.apiClient = apiClient
+        self.authFileURL = authFileURL ?? home.appendingPathComponent(".codex/auth.json")
+        self.fileManager = fileManager
     }
 
     func isConfigured() async -> Bool {
-        FileManager.default.fileExists(atPath: sessionsDir.path)
+        fileManager.fileExists(atPath: sessionsDir.path)
+            || loadAuthTokens() != nil
     }
 
     func fetchUsage() async throws -> UsageData {
+        if let cached = Self.cachedIfFresh() {
+            return cached
+        }
+
         let now = Date()
 
+        // Preferred: live ChatGPT usage API.
+        if let tokens = loadAuthTokens(),
+           let usage = try? await fetchFromAPI(tokens: tokens, now: now) {
+            Self.updateCache(usage, now: now)
+            return usage
+        }
+
+        // Fallback 1: local JSONL session files (legacy CLI versions).
         let weeklyMetric: UsageMetric
         if let rateLimits = findLatestRateLimits(now: now) {
             let windows = rateLimits.compactMap(Self.weeklyWindow(from:))
@@ -93,7 +245,7 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
                 resetTime: resetTime, cacheKey: "codexUsageCache.weekly", now: now
             )
         } else {
-            // Fallback: sum tokens from session files within the weekly window
+            // Fallback 2: sum tokens from session files within the weekly window
             let weekly = sumTokensFromSessions(now: now)
             weeklyMetric = resolveMetric(
                 used: Double(weekly), total: weeklyTokenLimit,
@@ -101,30 +253,110 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
             )
         }
 
-        let planName = (defaults.string(forKey: "codexPlan")
-            .flatMap { CodexPlan(rawValue: $0) } ?? .pro).rawValue
-
-        return UsageData(
+        let result = UsageData(
             service: .codex,
             fiveHourUsage: weeklyMetric,
             weeklyUsage: nil,
             lastUpdated: now,
             isAvailable: true,
-            planName: planName
+            planName: storedPlanName()
+        )
+        Self.updateCache(result, now: now)
+        return result
+    }
+
+    // MARK: - ChatGPT Usage API
+
+    private func fetchFromAPI(tokens: CodexAuthFile.Tokens, now: Date) async throws -> UsageData {
+        var headers = [
+            "Authorization": "Bearer \(tokens.accessToken ?? "")",
+            "Accept": "application/json",
+            "User-Agent": "codex-cli/0.147.0"
+        ]
+        if let accountID = tokens.accountId {
+            headers["ChatGPT-Account-Id"] = accountID
+        }
+
+        let response: CodexUsageAPIResponse = try await apiClient.get(
+            url: Self.usageURL,
+            headers: headers,
+            timeout: 10
+        )
+
+        // The API reports a single weekly window (7 days) in primary_window.
+        let primary = response.rateLimit?.primaryWindow
+        let usedPercent = primary?.usedPercent ?? 0
+        let used = weeklyTokenLimit * usedPercent / 100.0
+
+        let resetTime: Date?
+        if let resetAt = primary?.resetAt, resetAt > 0 {
+            resetTime = Date(timeIntervalSince1970: TimeInterval(resetAt))
+        } else if let resetAfter = primary?.resetAfterSeconds, resetAfter >= 0 {
+            resetTime = now.addingTimeInterval(TimeInterval(resetAfter))
+        } else {
+            resetTime = nil
+        }
+
+        let metric = resolveMetric(
+            used: used, total: weeklyTokenLimit,
+            resetTime: resetTime, cacheKey: "codexUsageCache.weekly", now: now
+        )
+
+        return UsageData(
+            service: .codex,
+            fiveHourUsage: metric,
+            weeklyUsage: nil,
+            lastUpdated: now,
+            isAvailable: true,
+            planName: planName(from: response.planType)
         )
     }
 
-    /// Selects the 7-day window from a rate-limit payload.
-    /// Current format: `primary` is the weekly window (window_minutes 10080).
-    /// Legacy format: `primary` is 5h and `secondary` is the weekly window.
-    private static func weeklyWindow(from limits: CodexRateLimits) -> CodexRateWindow? {
-        if let primary = limits.primary, (primary.window_minutes ?? 0) >= 10080 {
-            return primary
+    /// Maps the API `plan_type` to the app's display name.
+    private func planName(from apiPlan: String?) -> String? {
+        if let apiPlan, !apiPlan.isEmpty {
+            return apiPlan
         }
-        return limits.secondary
+        return storedPlanName()
+    }
+
+    private func storedPlanName() -> String? {
+        (defaults.string(forKey: "codexPlan")
+            .flatMap { CodexPlan(rawValue: $0) } ?? .pro).rawValue
+    }
+
+    // MARK: - Credentials
+
+    /// Loads the OAuth token + account id from `~/.codex/auth.json`.
+    func loadAuthTokens(authFileURL: URL? = nil) -> CodexAuthFile.Tokens? {
+        let url = authFileURL ?? self.authFileURL
+        guard let data = try? Data(contentsOf: url),
+              let auth = try? JSONDecoder().decode(CodexAuthFile.self, from: data),
+              let accessToken = auth.tokens?.accessToken, !accessToken.isEmpty else {
+            return nil
+        }
+        return auth.tokens
     }
 
     // MARK: - Metric Caching
+
+    static func cachedIfFresh(now: Date = Date()) -> UsageData? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        guard let cached = cachedResponse,
+              let cachedTime = cachedAt,
+              now.timeIntervalSince(cachedTime) < minCacheTTL else {
+            return nil
+        }
+        return cached
+    }
+
+    static func updateCache(_ data: UsageData, now: Date = Date()) {
+        cacheLock.lock()
+        cachedResponse = data
+        cachedAt = now
+        cacheLock.unlock()
+    }
 
     private func resolveMetric(
         used: Double, total: Double, resetTime: Date?,
@@ -194,14 +426,24 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
 
     // MARK: - Window Resolution
 
+    /// Selects the 7-day window from a rate-limit payload.
+    /// Current format: `primary` is the weekly window (window_minutes 10080).
+    /// Legacy format: `primary` is 5h and `secondary` is the weekly window.
+    private static func weeklyWindow(from limits: CodexRateLimits) -> CodexRateWindow? {
+        if let primary = limits.primary, (primary.windowMinutes ?? 0) >= 10080 {
+            return primary
+        }
+        return limits.secondary
+    }
+
     /// Resolve a rate window: advance stale resets_at by window_minutes until future.
     private func resolveWindow(
         window: CodexRateWindow, tokenLimit: Double, now: Date
     ) -> (used: Double, resetTime: Date?) {
-        let usedPercent = window.used_percent ?? 0
+        let usedPercent = window.usedPercent ?? 0
         let used = tokenLimit * usedPercent / 100.0
 
-        guard let resetsAt = window.resets_at else {
+        guard let resetsAt = window.resetsAt else {
             return (used, nil)
         }
 
@@ -212,7 +454,7 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
         }
 
         // resets_at is stale — advance by window intervals to find next reset
-        if let windowMinutes = window.window_minutes, windowMinutes > 0 {
+        if let windowMinutes = window.windowMinutes, windowMinutes > 0 {
             let windowSeconds = TimeInterval(windowMinutes) * 60
             while resetDate <= now {
                 resetDate = resetDate.addingTimeInterval(windowSeconds)
@@ -293,8 +535,8 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
         for record in records {
             guard record.type == "event_msg",
                   record.payload?.type == "token_count",
-                  let rl = record.payload?.rate_limits else { continue }
-            let key = rl.limit_id ?? ""
+                  let rl = record.payload?.rateLimits else { continue }
+            let key = rl.limitId ?? ""
             latestByLimitID[key] = rl
         }
 
@@ -316,11 +558,11 @@ final class CodexUsageProvider: UsageProviderProtocol, @unchecked Sendable {
                 guard record.type == "event_msg",
                       record.payload?.type == "token_count",
                       let info = record.payload?.info,
-                      let lastUsage = info.last_token_usage,
+                      let lastUsage = info.lastTokenUsage,
                       let ts = record.timestamp,
                       let date = DateUtils.parseISO8601(ts) else { continue }
 
-                let tokens = lastUsage.totalTokens
+                let tokens = lastUsage.totalTokensSum
                 if date >= weeklyCutoff && date <= now {
                     weeklyTotal += tokens
                 }

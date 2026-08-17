@@ -8,6 +8,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
     case cursor  = "Cursor"
     case opencode = "OpenCode"
     case zai     = "Z.ai Coding Plan"
+    case cmd     = "Command Code"
 
     var darkColor: Color {
         switch self {
@@ -18,6 +19,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
         case .cursor:  Color(red: 0.15, green: 0.68, blue: 0.38)    // green-600
         case .opencode: Color(red: 0.973, green: 0.757, blue: 0.129) // yellow-500
         case .zai:     Color(red: 0.486, green: 0.227, blue: 0.929) // violet-600
+        case .cmd:     Color(red: 0.922, green: 0.29, blue: 0.29)    // red-500
         }
     }
 
@@ -30,6 +32,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
         case .cursor:  Color(red: 0.49, green: 0.89, blue: 0.64)    // green-300
         case .opencode: Color(red: 0.996, green: 0.929, blue: 0.634) // yellow-200
         case .zai:     Color(red: 0.769, green: 0.710, blue: 0.992) // violet-300
+        case .cmd:     Color(red: 0.996, green: 0.722, blue: 0.722) // red-300
         }
     }
 
@@ -42,6 +45,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
         case .cursor:  "CR"
         case .opencode: "OC"
         case .zai:     "Z"
+        case .cmd:     "CMD"
         }
     }
 
@@ -83,6 +87,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
         case .cursor:  "cursor"
         case .opencode: "opencode"
         case .zai:     "zai"
+        case .cmd:     "commandcode"
         }
     }
 }

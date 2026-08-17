@@ -75,6 +75,14 @@ struct UsageHistoryServicePanel: Identifiable, Sendable {
     let trendUnit: UsageUnit?
 }
 
+/// Shared inputs for building one service's history panel.
+struct HistoryPanelContext {
+    let gridStart: Date
+    let gridEnd: Date
+    let secondarySamplesSince: Date
+    let now: Date
+}
+
 struct UsageHistoryTrendPoint: Sendable {
     let date: Date
     let value: Double
@@ -145,142 +153,6 @@ final class UsageHistoryViewModel: ObservableObject {
         }
     }
 
-    private func refresh(generation: UInt64) async {
-        let now = nowProvider()
-        let currentWeekStart = startOfWeek(containing: now) ?? calendar.startOfDay(for: now)
-        let gridStart = calendar.date(
-            byAdding: .day,
-            value: -((selectedRangeWeeks - 1) * 7),
-            to: currentWeekStart
-        ) ?? currentWeekStart
-        let gridEnd = calendar.date(
-            byAdding: .day,
-            value: (selectedRangeWeeks * 7) - 1,
-            to: gridStart
-        ) ?? now
-
-        let allServices = await store.availableServices(since: gridStart, until: now)
-        guard !isStale(generation) else { return }
-
-        let services = selectedWindow == .secondary
-            ? allServices.filter(\.hasFiveHourSevenDayStructure)
-            : allServices
-        let orderedServices = services.sorted {
-            Self.serviceOrderIndex(for: $0) < Self.serviceOrderIndex(for: $1)
-        }
-        availableServices = orderedServices
-
-        guard !orderedServices.isEmpty else {
-            guard !isStale(generation) else { return }
-            resetStateForEmptyHistory()
-            return
-        }
-
-        let secondarySamplesSince = calendar.date(
-            byAdding: .day,
-            value: -Self.secondarySampleWindowDays,
-            to: now
-        ) ?? gridStart
-
-        var panels: [UsageHistoryServicePanel] = []
-        for service in orderedServices {
-            let dayRecords = await store.dayRecords(
-                for: service,
-                since: gridStart,
-                until: gridEnd
-            )
-            guard !isStale(generation) else { return }
-
-            let secondarySamples = await store.secondarySamples(
-                for: service,
-                since: secondarySamplesSince,
-                until: now
-            )
-            guard !isStale(generation) else { return }
-
-            let isSecondaryAvailable = dayRecords.contains {
-                $0.secondaryPeakRatio != nil || $0.secondaryAverageRatio != nil
-            } || !secondarySamples.isEmpty
-
-            let displayWindow: UsageHistoryWindow = (
-                selectedWindow == .secondary && isSecondaryAvailable
-            ) ? .secondary : .primary
-
-            let heatmapCells = buildHeatmapCells(
-                dayRecords: dayRecords,
-                window: displayWindow,
-                gridStart: gridStart,
-                totalDays: selectedRangeWeeks * 7,
-                now: now
-            )
-            let dailySummary = makeDailySummary(from: heatmapCells, now: now)
-            let trendPoints = heatmapCells
-                .filter { $0.date <= now }
-                .map { UsageHistoryTrendPoint(date: $0.date, value: $0.usedValue) }
-            let trendUnit = heatmapCells
-                .compactMap(\.unit)
-                .first ?? fallbackUnit(for: service, window: displayWindow)
-
-            let isSevenDayCycleAvailable = (
-                displayWindow == .secondary &&
-                service.weeklyLabel == "7d"
-            )
-
-            let allClosedCycles = isSevenDayCycleAvailable
-                ? buildClosedCycleCells(from: secondarySamples, now: now)
-                : []
-            let cycleCells = isSevenDayCycleAvailable
-                ? Array(allClosedCycles.suffix(Self.cyclePanelMaxCycles))
-                : []
-            let cycleSummary = isSevenDayCycleAvailable
-                ? makeCycleSummary(from: allClosedCycles)
-                : .empty
-
-            let frequencyDays: Int = {
-                switch selectedWindow {
-                case .primary:
-                    return dayRecords.filter { $0.primaryPeakRatio > 0 }.count
-                case .secondary:
-                    guard isSecondaryAvailable else { return 0 }
-                    return dayRecords.filter { ($0.secondaryPeakRatio ?? 0) > 0 }.count
-                }
-            }()
-
-            panels.append(
-                UsageHistoryServicePanel(
-                    id: service,
-                    service: service,
-                    displayWindow: displayWindow,
-                    isSecondaryAvailable: isSecondaryAvailable,
-                    heatmapCells: heatmapCells,
-                    dailySummary: dailySummary,
-                    cycleSummary: cycleSummary,
-                    cycleCells: cycleCells,
-                    isSevenDayCycleAvailable: isSevenDayCycleAvailable,
-                    usageFrequencyDays: frequencyDays,
-                    trendPoints: trendPoints,
-                    trendUnit: trendUnit
-                )
-            )
-        }
-
-        guard !isStale(generation) else { return }
-
-        panels.sort {
-            if $0.usageFrequencyDays != $1.usageFrequencyDays {
-                return $0.usageFrequencyDays > $1.usageFrequencyDays
-            }
-
-            if $0.dailySummary.averageDailyPeakRatio != $1.dailySummary.averageDailyPeakRatio {
-                return $0.dailySummary.averageDailyPeakRatio > $1.dailySummary.averageDailyPeakRatio
-            }
-
-            return Self.serviceOrderIndex(for: $0.service) < Self.serviceOrderIndex(for: $1.service)
-        }
-
-        servicePanels = panels
-        availableServices = panels.map(\.service)
-    }
 
     private func bindInputs() {
         $selectedWindow
@@ -555,14 +427,14 @@ final class UsageHistoryViewModel: ObservableObject {
             switch service {
             case .codex: return .tokens
             case .gemini, .copilot, .cursor: return .requests
-            case .claude, .zai, .opencode: return .percent
+            case .claude, .zai, .opencode, .cmd: return .percent
             }
         case .secondary:
             switch service {
             case .codex: return .tokens
             case .claude: return .percent
             case .zai: return .requests
-            case .gemini, .copilot, .cursor, .opencode: return nil
+            case .gemini, .copilot, .cursor, .opencode, .cmd: return nil
             }
         }
     }
@@ -575,3 +447,214 @@ final class UsageHistoryViewModel: ObservableObject {
         "cycle-\(Int(resetAt.timeIntervalSince1970))"
     }
 }
+
+
+// MARK: - Refresh
+
+extension UsageHistoryViewModel {
+    private func refresh(generation: UInt64) async {
+        let now = nowProvider()
+        let currentWeekStart = startOfWeek(containing: now) ?? calendar.startOfDay(for: now)
+        let gridStart = calendar.date(
+            byAdding: .day,
+            value: -((selectedRangeWeeks - 1) * 7),
+            to: currentWeekStart
+        ) ?? currentWeekStart
+        let gridEnd = calendar.date(
+            byAdding: .day,
+            value: (selectedRangeWeeks * 7) - 1,
+            to: gridStart
+        ) ?? now
+
+        let allServices = await store.availableServices(since: gridStart, until: now)
+        guard !isStale(generation) else { return }
+
+        let services = selectedWindow == .secondary
+            ? allServices.filter(\.hasFiveHourSevenDayStructure)
+            : allServices
+        let orderedServices = services.sorted {
+            Self.serviceOrderIndex(for: $0) < Self.serviceOrderIndex(for: $1)
+        }
+        availableServices = orderedServices
+
+        guard !orderedServices.isEmpty else {
+            guard !isStale(generation) else { return }
+            resetStateForEmptyHistory()
+            return
+        }
+
+        let secondarySamplesSince = calendar.date(
+            byAdding: .day,
+            value: -Self.secondarySampleWindowDays,
+            to: now
+        ) ?? gridStart
+
+        var panels: [UsageHistoryServicePanel] = []
+        let panelContext = HistoryPanelContext(
+            gridStart: gridStart,
+            gridEnd: gridEnd,
+            secondarySamplesSince: secondarySamplesSince,
+            now: now
+        )
+        for service in orderedServices {
+            guard let panel = await buildPanel(
+                for: service,
+                context: panelContext,
+                generation: generation
+            ) else { return }
+            panels.append(panel)
+        }
+
+        guard !isStale(generation) else { return }
+
+        panels.sort {
+            if $0.usageFrequencyDays != $1.usageFrequencyDays {
+                return $0.usageFrequencyDays > $1.usageFrequencyDays
+            }
+
+            if $0.dailySummary.averageDailyPeakRatio != $1.dailySummary.averageDailyPeakRatio {
+                return $0.dailySummary.averageDailyPeakRatio > $1.dailySummary.averageDailyPeakRatio
+            }
+
+            return Self.serviceOrderIndex(for: $0.service) < Self.serviceOrderIndex(for: $1.service)
+        }
+
+        servicePanels = panels
+        availableServices = panels.map(\.service)
+    }
+
+    /// Builds one service's history panel (heatmap, summary, cycles, trend).
+    /// Returns nil when the refresh generation became stale mid-build.
+    private func buildPanel(
+        for service: ServiceType,
+        context: HistoryPanelContext,
+        generation: UInt64
+    ) async -> UsageHistoryServicePanel? {
+        guard let dayRecords = await fetchDayRecords(for: service, context: context, generation: generation) else {
+            return nil
+        }
+        guard let secondarySamples = await fetchSecondarySamples(for: service, context: context, generation: generation) else {
+            return nil
+        }
+
+        let isSecondaryAvailable = dayRecords.contains {
+            $0.secondaryPeakRatio != nil || $0.secondaryAverageRatio != nil
+        } || !secondarySamples.isEmpty
+
+        let displayWindow: UsageHistoryWindow = (
+            selectedWindow == .secondary && isSecondaryAvailable
+        ) ? .secondary : .primary
+
+        let heatmapCells = buildHeatmapCells(
+            dayRecords: dayRecords,
+            window: displayWindow,
+            gridStart: context.gridStart,
+            totalDays: selectedRangeWeeks * 7,
+            now: context.now
+        )
+        let dailySummary = makeDailySummary(from: heatmapCells, now: context.now)
+        let trendPoints = heatmapCells
+            .filter { $0.date <= context.now }
+            .map { UsageHistoryTrendPoint(date: $0.date, value: $0.usedValue) }
+        let trendUnit = heatmapCells
+            .compactMap(\.unit)
+            .first ?? fallbackUnit(for: service, window: displayWindow)
+
+        let cycle = cycleSection(
+            service: service,
+            displayWindow: displayWindow,
+            secondarySamples: secondarySamples,
+            now: context.now
+        )
+
+        let frequencyDays = usageFrequencyDays(
+            dayRecords: dayRecords,
+            isSecondaryAvailable: isSecondaryAvailable
+        )
+
+        return UsageHistoryServicePanel(
+            id: service,
+            service: service,
+            displayWindow: displayWindow,
+            isSecondaryAvailable: isSecondaryAvailable,
+            heatmapCells: heatmapCells,
+            dailySummary: dailySummary,
+            cycleSummary: cycle.cycleSummary,
+            cycleCells: cycle.cycleCells,
+            isSevenDayCycleAvailable: cycle.isSevenDayCycleAvailable,
+            usageFrequencyDays: frequencyDays,
+            trendPoints: trendPoints,
+            trendUnit: trendUnit
+        )
+    }
+
+    /// Loads a service's day records for the grid, or nil when stale.
+    private func fetchDayRecords(
+        for service: ServiceType,
+        context: HistoryPanelContext,
+        generation: UInt64
+    ) async -> [UsageHistoryDayRecord]? {
+        let records = await store.dayRecords(
+            for: service,
+            since: context.gridStart,
+            until: context.gridEnd
+        )
+        guard !isStale(generation) else { return nil }
+        return records
+    }
+
+    /// Loads a service's secondary samples, or nil when stale.
+    private func fetchSecondarySamples(
+        for service: ServiceType,
+        context: HistoryPanelContext,
+        generation: UInt64
+    ) async -> [UsageHistorySecondarySample]? {
+        let samples = await store.secondarySamples(
+            for: service,
+            since: context.secondarySamplesSince,
+            until: context.now
+        )
+        guard !isStale(generation) else { return nil }
+        return samples
+    }
+
+    /// Computes the closed-cycle section (cells + summary) for a service.
+    private func cycleSection(
+        service: ServiceType,
+        displayWindow: UsageHistoryWindow,
+        secondarySamples: [UsageHistorySecondarySample],
+        now: Date
+    ) -> (isSevenDayCycleAvailable: Bool, cycleCells: [UsageHistoryCycleCell], cycleSummary: UsageHistoryCycleSummary) {
+        let isSevenDayCycleAvailable = (
+            displayWindow == .secondary &&
+            service.weeklyLabel == "7d"
+        )
+
+        let allClosedCycles = isSevenDayCycleAvailable
+            ? buildClosedCycleCells(from: secondarySamples, now: now)
+            : []
+        let cycleCells = isSevenDayCycleAvailable
+            ? Array(allClosedCycles.suffix(Self.cyclePanelMaxCycles))
+            : []
+        let cycleSummary = isSevenDayCycleAvailable
+            ? makeCycleSummary(from: allClosedCycles)
+            : .empty
+
+        return (isSevenDayCycleAvailable, cycleCells, cycleSummary)
+    }
+
+    /// Number of days in the selected window with usage above zero.
+    private func usageFrequencyDays(
+        dayRecords: [UsageHistoryDayRecord],
+        isSecondaryAvailable: Bool
+    ) -> Int {
+        switch selectedWindow {
+        case .primary:
+            return dayRecords.filter { $0.primaryPeakRatio > 0 }.count
+        case .secondary:
+            guard isSecondaryAvailable else { return 0 }
+            return dayRecords.filter { ($0.secondaryPeakRatio ?? 0) > 0 }.count
+        }
+    }
+}
+

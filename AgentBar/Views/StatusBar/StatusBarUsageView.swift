@@ -1,15 +1,15 @@
 import SwiftUI
 
-/// Menu bar status item: shows three pinned services at once (Claude, Codex,
-/// OpenCode) as icon + remaining percentage. Services with a 5h and a weekly
-/// window (Claude, OpenCode) stack both percentages; Codex shows its single
-/// weekly percentage.
+/// Menu bar status item: shows pinned services at once (Claude, Codex,
+/// OpenCode, Command Code) as icon + remaining percentage. Services with a 5h
+/// and a weekly window (Claude, OpenCode, Command Code) stack both
+/// percentages; Codex shows its single weekly percentage.
 struct StatusBarUsageView: View {
     let services: [UsageData]
     var hasError: Bool = false
 
-    /// The three services pinned in the menu bar, in display order.
-    private static let pinnedServices: [ServiceType] = [.claude, .codex, .opencode]
+    /// The services pinned in the menu bar, in display order.
+    private static let pinnedServices: [ServiceType] = [.claude, .codex, .opencode, .cmd]
 
     private var displayed: [UsageData] {
         Self.pinnedServices.compactMap { pinned in
@@ -60,7 +60,7 @@ private struct ServiceUsageStack: View {
             Text(usage.service.shortName)
                 .font(.system(size: 10, weight: .bold, design: .rounded))
                 .foregroundStyle(usage.service.darkColor)
-                .frame(width: 18, alignment: .leading)
+                .frame(width: iconWidth, alignment: .leading)
                 .frame(maxHeight: .infinity)
             VStack(alignment: .leading, spacing: 1) {
                 percentLine(label: usage.service.fiveHourLabel, value: fiveHourPercent)
@@ -70,6 +70,11 @@ private struct ServiceUsageStack: View {
             }
         }
         .fixedSize()
+    }
+
+    /// Icon column width: 2-char names (CC, CX, OC) need 18pt, 3-char (CMD) needs 24pt.
+    private var iconWidth: CGFloat {
+        usage.service.shortName.count >= 3 ? 24 : 18
     }
 
     private func percentLine(label: String, value: String) -> some View {
