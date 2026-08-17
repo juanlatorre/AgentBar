@@ -2,7 +2,11 @@
 
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
+## Iteration 110: Command Code back in menu bar as red CC
+- **User preference**: Command Code returns to the pinned menu bar services, but with shortName "CC" instead of "CMD" — the 3-letter name was too wide and pushed the Claude letters out at 184pt. Now Claude Code (CC, orange) and Command Code (CC, red) are distinguishable by color. `ServiceType.cmd.shortName` is now "CC" (was "CMD") and `pinnedServices` is `[.claude, .codex, .opencode, .cmd]`. Verified via screenshot: CC orange (5h 100% / 7d 70%), CX blue (7d 0%), OC yellow (5h 87% / 7d 73%), CC red (5h / 7d) all visible.
+
 ## Iteration 109: Drop CMD from menu bar, widen status item so CC shows
+
 - **Menu bar back to 3 services**: Command Code (CMD) took too much horizontal space and pushed the Claude (CC) letters out of the widget. `StatusBarUsageView.pinnedServices` reverts to `[.claude, .codex, .opencode]`; CMD remains fully supported as a service (provider, settings toggle, popover row) — it's just not pinned in the menu bar.
 - **Widget width fix**: widened the status item to 200pt (`statusItemLength`) and gave the `NSHostingView` a fixed 200×24 frame at setup (the fresh button's bounds can be empty, which rendered an invisible strip that never re-layouted). Verified via full-screen screenshot: CC (orange, 5h 100% / 7d 70%), CX (blue, 7d 0%), OC (yellow, 5h 87% / 7d 73%) all visible in the menu bar.
 

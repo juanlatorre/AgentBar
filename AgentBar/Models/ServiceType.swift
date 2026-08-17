@@ -45,7 +45,7 @@ enum ServiceType: String, CaseIterable, Codable, Sendable {
         case .cursor:  "CR"
         case .opencode: "OC"
         case .zai:     "Z"
-        case .cmd:     "CMD"
+        case .cmd:     "CC"
         }
     }
 

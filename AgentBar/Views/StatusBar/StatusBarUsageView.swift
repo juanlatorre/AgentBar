@@ -9,7 +9,7 @@ struct StatusBarUsageView: View {
     var hasError: Bool = false
 
     /// The services pinned in the menu bar, in display order.
-    private static let pinnedServices: [ServiceType] = [.claude, .codex, .opencode]
+    private static let pinnedServices: [ServiceType] = [.claude, .codex, .opencode, .cmd]
 
     private var displayed: [UsageData] {
         Self.pinnedServices.compactMap { pinned in
