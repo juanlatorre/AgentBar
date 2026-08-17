@@ -4,6 +4,9 @@ import Combine
 
 @MainActor
 final class StatusBarController {
+    /// Fixed width for the status item and its hosting view.
+    private static let statusItemLength: CGFloat = 200
+
     private var statusItem: NSStatusItem?
     private var hostingView: NSHostingView<StatusBarUsageView>?
     private var cancellables: Set<AnyCancellable> = []
@@ -18,7 +21,7 @@ final class StatusBarController {
 
     func setup() {
         if statusItem == nil {
-            statusItem = NSStatusBar.system.statusItem(withLength: 200)
+            statusItem = NSStatusBar.system.statusItem(withLength: Self.statusItemLength)
         }
 
         guard let button = statusItem?.button else {
@@ -31,13 +34,15 @@ final class StatusBarController {
 
         let barView = StatusBarUsageView(services: viewModel.usageData)
         let hosting = NSHostingView(rootView: barView)
-        // Use a non-negative frame: with a fresh status item the button bounds can
-        // still be empty, and an inset could produce an invalid (invisible) frame.
+        // Fixed frame matching the status item width: with a fresh status item the
+        // button bounds can still be empty at setup time, and a zero frame would
+        // render an invisible strip that never re-layouts. A fixed non-zero frame
+        // plus autoresizing keeps the hosting view visible as the button grows.
         hosting.frame = NSRect(
             x: 0,
             y: 0,
-            width: max(button.bounds.width, 0),
-            height: max(button.bounds.height, 0)
+            width: Self.statusItemLength,
+            height: 24
         )
         hosting.autoresizingMask = [.width, .height]
         button.addSubview(hosting)

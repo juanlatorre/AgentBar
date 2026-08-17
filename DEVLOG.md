@@ -4,9 +4,10 @@
 
 ## Iteration 109: Drop CMD from menu bar, widen status item so CC shows
 - **Menu bar back to 3 services**: Command Code (CMD) took too much horizontal space and pushed the Claude (CC) letters out of the widget. `StatusBarUsageView.pinnedServices` reverts to `[.claude, .codex, .opencode]`; CMD remains fully supported as a service (provider, settings toggle, popover row) — it's just not pinned in the menu bar.
-- **Widget width fix**: the status item was 184pt, which was enough for 3 services but the inner `frame(maxWidth: .infinity)` let SwiftUI compress the fixed-size blocks, clipping the colored short names. Removed `.frame(maxWidth: .infinity)` (the HStack now hugs its content) and widened the item to 200pt. Verified via screenshot: CC (orange, 5h 100% / 7d 70%), CX (blue, 7d 0%), OC (yellow, 5h 87% / 7d 73%) all fully visible.
+- **Widget width fix**: widened the status item to 200pt (`statusItemLength`) and gave the `NSHostingView` a fixed 200×24 frame at setup (the fresh button's bounds can be empty, which rendered an invisible strip that never re-layouted). Verified via full-screen screenshot: CC (orange, 5h 100% / 7d 70%), CX (blue, 7d 0%), OC (yellow, 5h 87% / 7d 73%) all visible in the menu bar.
 
 ## Iteration 108: Fix Codex tracker stuck + add Command Code (CMD) service
+
 - **New Command Code provider**: `CommandCodeUsageProvider` reads `~/.commandcode/auth.json` (`apiKey`) and calls `https://api.commandcode.ai/alpha/billing/credits` (5h + weekly credit windows with used/cap/resetAt) + `/alpha/billing/subscriptions` (planId). Requires `User-Agent: command-code-cli/1.26.0` or Cloudflare returns 1010. Plan ids map to display names (individual-goat → Goat).
 - **Fourth menu bar service**: `ServiceType.cmd` ("Command Code", shortName "CMD", red-500) pinned in `StatusBarUsageView` after OpenCode; 5h/weekly stacked percentages like Claude/OpenCode. Icon column widens for 3-char names (18→24pt) so CMD isn't clipped. Settings gains a Command Code section with an Enabled toggle (`cmdEnabled`).
 - **Refactors to satisfy pi-lens size rules**: `UsageHistoryViewModel.refresh` split into `refresh` + `buildPanel` (116→57 significant lines); `SettingsView`'s `usageTab`/`notificationsTab`/`agentSoundOverridesSection` moved to same-file extensions (679→274 significant lines). No logic changed.
