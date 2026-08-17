@@ -5,7 +5,7 @@ import Combine
 @MainActor
 final class StatusBarController {
     /// Fixed width for the status item and its hosting view.
-    private static let statusItemLength: CGFloat = 200
+    private static let statusItemLength: CGFloat = 300
 
     private var statusItem: NSStatusItem?
     private var hostingView: NSHostingView<StatusBarUsageView>?
