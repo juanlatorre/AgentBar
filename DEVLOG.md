@@ -3,6 +3,7 @@
 > Iterations 1–69 archived in [DEVLOG-archive.md](DEVLOG-archive.md).
 
 ## Iteration 111: Widen widget so the outer CC blocks are not clipped
+
 - **Width fix**: with 4 pinned services the status item needed more room — the outer blocks (Claude CC orange, Command Code CC red) were clipped. `statusItemLength` raised 200 → 300pt, and the inner `frame(maxWidth: .infinity)` was removed so the HStack measures its natural content width (~242pt) and the hosting view centers it instead of compressing the fixed-size blocks. Verified via screenshot: all four blocks fully visible (CC orange 6h 0% / 7d 61%, CX blue 7d 0%, OC yellow 6h 84% / 7d 72%, CC red 6h 94% / 7d 96%).
 - **SettingsView split for pi-lens size rule**: `SettingsView`'s same-file extensions were counted toward `type_body_length` (679 > 350). The three extensions (`usageTab`, `notificationsTab`, `agentSoundOverridesSection`) moved to `SettingsView+UsageTab.swift`, `SettingsView+NotificationsTab.swift`, `SettingsView+SoundOverrides.swift`; the 44 `private` members they use became internal. `HookConfigurationStatusRow` also internal. pi-lens full scan: no issues.
 
